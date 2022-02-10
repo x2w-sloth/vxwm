@@ -85,9 +85,10 @@ static xcb_keycode_t *keysym_to_keycodes(xcb_keysym_t);
 static xcb_keysym_t keycode_to_keysym(xcb_keycode_t);
 static void grab_keys(void);
 static void ptr_motion(ptr_state_t);
-static bool cln_has_proto(client_t *, xcb_atom_t);
+static bool has_proto(xcb_window_t, xcb_atom_t);
 static void send_msg(xcb_window_t, xcb_atom_t);
 static void stack_win(xcb_window_t, target_t);
+static void focus_win(xcb_window_t);
 // event handlers
 static void on_key_press(xcb_generic_event_t *);
 static void on_button_press(xcb_generic_event_t *);
@@ -339,15 +340,15 @@ void ptr_motion(ptr_state_t state)
   ptr_state = state; // see on_motion_notify
 }
 
-bool cln_has_proto(client_t *c, xcb_atom_t proto)
+bool has_proto(xcb_window_t win, xcb_atom_t proto)
 {
   xcb_icccm_get_wm_protocols_reply_t reply;
   xcb_get_property_cookie_t cookie;
   int i, n;
 
-  cookie = xcb_icccm_get_wm_protocols_unchecked(conn, c->tab[c->ft], wm_atom[WmProtocols]);
+  cookie = xcb_icccm_get_wm_protocols_unchecked(conn, win, wm_atom[WmProtocols]);
   if (!xcb_icccm_get_wm_protocols_reply(conn, cookie, &reply, NULL)) {
-    log("failed to retrieve wm protocols for %d", c->tab[c->ft]);
+    log("failed to retrieve wm protocols for %d", win);
     return false;
   }
 
@@ -374,6 +375,13 @@ void stack_win(xcb_window_t win, target_t t)
   masks = XCB_CONFIG_WINDOW_STACK_MODE;
   vals[0] = t == Top ? XCB_STACK_MODE_ABOVE : XCB_STACK_MODE_BELOW;
   xcb_configure_window(conn, win, masks, vals);
+}
+
+void focus_win(xcb_window_t win)
+{
+  if (win != root && has_proto(win, wm_atom[WmTakeFocus]))
+    send_msg(win, wm_atom[WmTakeFocus]);
+  xcb_set_input_focus(conn, XCB_INPUT_FOCUS_POINTER_ROOT, win, XCB_CURRENT_TIME);
 }
 
 void on_key_press(xcb_generic_event_t *ge)
@@ -626,11 +634,11 @@ void focus_cln(client_t *c)
   if ((fc = c)) {
     raise_cln(fc); // TODO: raise_on_focus option
     xcb_change_window_attributes(conn, fc->frame, XCB_CW_BORDER_PIXEL, &fclr);
-    xcb_set_input_focus(conn, XCB_INPUT_FOCUS_POINTER_ROOT, fc->tab[fc->ft], XCB_CURRENT_TIME);
+    focus_win(fc->tab[fc->ft]);
     draw_tabs(fc);
     log("new focus: %d", fc->frame);
   } else {
-    xcb_set_input_focus(conn, XCB_INPUT_FOCUS_POINTER_ROOT, root, XCB_CURRENT_TIME);
+    focus_win(root);
     log("loosing focus");
   }
 }
@@ -789,7 +797,7 @@ void bn_kill_tab(const arg_t *arg)
   if (!fc)
     return;
 
-  if (cln_has_proto(fc, wm_atom[WmDeleteWindow]))
+  if (has_proto(fc->tab[fc->ft], wm_atom[WmDeleteWindow]))
     send_msg(fc->tab[fc->ft], wm_atom[WmDeleteWindow]);
   else
     xcb_kill_client(conn, fc->tab[fc->ft]);
@@ -992,7 +1000,7 @@ void bn_focus_tab(const arg_t *arg)
 
   // raise tab window and redraw client tabs
   stack_win(win, Top);
-  xcb_set_input_focus(conn, XCB_INPUT_FOCUS_POINTER_ROOT, win, XCB_CURRENT_TIME);
+  focus_win(win);
   draw_tabs(fc);
 
   xcb_flush(conn);
