@@ -125,6 +125,7 @@ static client_t *win_to_cln(xcb_window_t);
 static void bn_quit(const arg_t *);
 static void bn_spawn(const arg_t *);
 static void bn_kill_tab(const arg_t *);
+static void bn_swap_tab(const arg_t *);
 static void bn_move_cln(const arg_t *);
 static void bn_resize_cln(const arg_t *);
 static void bn_toggle_select(const arg_t *);
@@ -802,6 +803,36 @@ void bn_kill_tab(const arg_t *arg)
   else
     xcb_kill_client(conn, fc->tab[fc->ft]);
   xcb_flush(conn);
+}
+
+void bn_swap_tab(const arg_t *arg)
+{
+  int swp = -1;
+
+  if (!fc || fc->nt == 1)
+    return;
+
+  switch (arg->t) {
+    case First:
+    case Top:
+      swp = 0;
+      break;
+    case Last:
+    case Bottom:
+      swp = fc->nt - 1;
+      break;
+    case Prev:
+      swp = fc->ft == 0 ? fc->nt - 1 : fc->ft - 1;
+      break;
+    case This:
+      swp = fc->ft;
+      break;
+    case Next:
+      swp = fc->ft == fc->nt - 1 ? 0 : fc->ft + 1;
+      break;
+  }
+  SWAP(fc->tab[swp], fc->tab[fc->ft])
+  bn_focus_tab(arg);
 }
 
 void bn_move_cln(const arg_t *arg)

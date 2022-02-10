@@ -1,12 +1,12 @@
 #ifndef VXWM_H
 #define VXWM_H
 
-#define VXWM_VERSION_MAJOR   "0"
-#define VXWM_VERSION_MINOR   "1"
-#define VXWM_VERSION_PATCH   "0"
-#define VXWM_VERSION         VXWM_VERSION_MAJOR "." \
-                             VXWM_VERSION_MINOR "." \
-                             VXWM_VERSION_PATCH
+#define VXWM_VERSION_MAJOR    "0"
+#define VXWM_VERSION_MINOR    "1"
+#define VXWM_VERSION_PATCH    "0"
+#define VXWM_VERSION          VXWM_VERSION_MAJOR "." \
+                              VXWM_VERSION_MINOR "." \
+                              VXWM_VERSION_PATCH
 
 #define VXWM_PAGE_CAPACITY    16
 #define VXWM_CLN_MIN_W        30
@@ -24,8 +24,6 @@
 #define VXWM_ERR_FILE         stderr
 
 #define BORDER      2 * VXWM_CLN_BORDER_W
-#define CLNW(C)     (C->w + BORDER * 2)
-#define CLNH(C)     (C->h + BORDER * 2)
 #define INPAGE(C)   (C->tag & (1 << fm->fp))
 
 #include <xcb/xproto.h>

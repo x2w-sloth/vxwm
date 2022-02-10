@@ -9,6 +9,7 @@
 
 #define MIN(L, R)       ((L) < (R) ? (L) : (R))
 #define MAX(L, R)       ((L) > (R) ? (L) : (R))
+#define SWAP(L, R)      {(L) ^= (R); (R) ^= (L); (L) ^= (R);}
 #define LENGTH(ARR)     (sizeof(ARR) / sizeof(*ARR))
 #define UNUSED(PTR)     (void)(PTR)
 #define ATOM_NAME(ATOM) (uint16_t)strlen(ATOM), ATOM

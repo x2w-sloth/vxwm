@@ -16,7 +16,7 @@ static page_t pages[] = {
 static const char *termcmd[] = { "st", NULL };
 
 static keybind_t keybinds[] = {
-  { MOD | CTRL,  XK_q,       bn_quit,           { .v = NULL } },
+  { MOD|CTRL,    XK_q,       bn_quit,           { .v = NULL } },
   { MOD,         XK_Return,  bn_spawn,          { .v = termcmd } },
   { MOD,         XK_m,       bn_merge_cln,      { .t = This } },
   { MOD,         XK_comma,   bn_split_cln,      { .v = NULL } },
@@ -24,11 +24,13 @@ static keybind_t keybinds[] = {
   { MOD,         XK_s,       bn_toggle_select,  { .v = NULL } },
   { MOD,         XK_d,       bn_toggle_float,   { .v = NULL } },
   { MOD,         XK_f,       bn_toggle_fullscr, { .v = NULL } },
+  { MOD,         XK_space,   bn_focus_cln,      { .t = First } },
   { MOD,         XK_j,       bn_focus_cln,      { .t = Next } },
   { MOD,         XK_k,       bn_focus_cln,      { .t = Prev } },
-  { MOD,         XK_space,   bn_focus_cln,      { .t = First } },
   { MOD,         XK_l,       bn_focus_tab,      { .t = Next } },
   { MOD,         XK_h,       bn_focus_tab,      { .t = Prev } },
+  { MOD|SHIFT,   XK_l,       bn_swap_tab,       { .t = Next } },
+  { MOD|SHIFT,   XK_h,       bn_swap_tab,       { .t = Prev } },
   { MOD,         XK_1,       bn_focus_page,     { .i = 0 } },
   { MOD,         XK_2,       bn_focus_page,     { .i = 1 } },
 };
