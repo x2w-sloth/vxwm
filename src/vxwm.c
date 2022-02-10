@@ -258,10 +258,10 @@ void cleanup(void)
 
 void atom_request(void)
 {
-  wm_cookies[WmProtocols]    = xcb_intern_atom(conn, false, ATOM_NAME("VXWM_PROTOCOLS"));
-  wm_cookies[WmTakeFocus]    = xcb_intern_atom(conn, false, ATOM_NAME("VXWM_TAKE_FOCUS"));
-  wm_cookies[WmDeleteWindow] = xcb_intern_atom(conn, false, ATOM_NAME("VXWM_DELETE_WINDOW"));
-  net_cookies[NetWmName]     = xcb_intern_atom(conn, false, ATOM_NAME("_NET_VXWM_NAME"));
+  wm_cookies[WmProtocols]    = xcb_intern_atom(conn, false, ATOM_NAME("WM_PROTOCOLS"));
+  wm_cookies[WmTakeFocus]    = xcb_intern_atom(conn, false, ATOM_NAME("WM_TAKE_FOCUS"));
+  wm_cookies[WmDeleteWindow] = xcb_intern_atom(conn, false, ATOM_NAME("WM_DELETE_WINDOW"));
+  net_cookies[NetWmName]     = xcb_intern_atom(conn, false, ATOM_NAME("_NET_WM_NAME"));
 }
 
 void atom_setup(void)

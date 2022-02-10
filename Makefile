@@ -13,7 +13,7 @@ all: clean vxwm
 vxwm: $(OBJ)
 	$(CC) $(LDFLAGS) $(OBJ) -o $@
 
-debug: CFLAGS += -DSXWM_DEBUG
+debug: CFLAGS += -DVXWM_DEBUG
 debug: clean vxwm
 
 clean:
