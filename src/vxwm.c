@@ -838,25 +838,52 @@ void bn_swap_tab(const arg_t *arg)
 
 void bn_swap_cln(const arg_t *arg)
 {
-  if (!fc)
+  client_t *p = NULL, *c;
+
+  if (!fc || arg->t == This)
     return;
 
   switch (arg->t) {
     case First:
+      if (next_tiled(fm->cln) == fc)
+        return;
+      c = fm->cln->next;
+      fm->cln->next = fc->next;
+      fc->next = fm->cln;
+      fm->cln = c;
       break;
-    case Top:
-      detach_cln(fc);
-      attach_cln(fc);
+    case Top: // not necessarily a 'swap'
       break;
     case Last:
     case Bottom:
+      if ((p = next_tiled(fc->next)) == NULL)
+        return;
+      while (next_tiled(p->next))
+        p = next_tiled(p->next);
       break;
     case Prev:
-      break;
-    case This:
+      if ((c = next_tiled(fm->cln)) == fc) // wrap to last tiled
+        for (p = c, c = NULL; next_tiled(p->next); p = next_tiled(p->next)) ;
+      while (c && next_tiled(c->next) != fc) {
+        p = c;
+        c = next_tiled(c->next);
+      }
       break;
     case Next:
+      p = next_tiled(fc->next);
       break;
+    default:
+      xassert(false, "bad argument in bn_swap_cln");
+      return;
+  }
+  // reattach focus client
+  detach_cln(fc);
+  if (p) {
+    fc->next = p->next;
+    p->next = fc;
+  } else {
+    fc->next = fm->cln;
+    fm->cln = fc;
   }
   arrange_mon(fm);
 }
