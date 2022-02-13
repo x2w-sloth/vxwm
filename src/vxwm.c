@@ -126,6 +126,7 @@ static void bn_quit(const arg_t *);
 static void bn_spawn(const arg_t *);
 static void bn_kill_tab(const arg_t *);
 static void bn_swap_tab(const arg_t *);
+static void bn_swap_cln(const arg_t *);
 static void bn_move_cln(const arg_t *);
 static void bn_resize_cln(const arg_t *);
 static void bn_toggle_select(const arg_t *);
@@ -833,6 +834,31 @@ void bn_swap_tab(const arg_t *arg)
   }
   SWAP(fc->tab[swp], fc->tab[fc->ft])
   bn_focus_tab(arg);
+}
+
+void bn_swap_cln(const arg_t *arg)
+{
+  if (!fc)
+    return;
+
+  switch (arg->t) {
+    case First:
+      break;
+    case Top:
+      detach_cln(fc);
+      attach_cln(fc);
+      break;
+    case Last:
+    case Bottom:
+      break;
+    case Prev:
+      break;
+    case This:
+      break;
+    case Next:
+      break;
+  }
+  arrange_mon(fm);
 }
 
 void bn_move_cln(const arg_t *arg)

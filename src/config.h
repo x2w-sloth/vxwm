@@ -29,6 +29,7 @@ static keybind_t keybinds[] = {
   { MOD,         XK_k,       bn_focus_cln,      { .t = Prev } },
   { MOD,         XK_l,       bn_focus_tab,      { .t = Next } },
   { MOD,         XK_h,       bn_focus_tab,      { .t = Prev } },
+  { MOD|SHIFT,   XK_space,   bn_swap_cln,       { .t = Top } },
   { MOD|SHIFT,   XK_l,       bn_swap_tab,       { .t = Next } },
   { MOD|SHIFT,   XK_h,       bn_swap_tab,       { .t = Prev } },
   { MOD,         XK_1,       bn_focus_page,     { .i = 0 } },
