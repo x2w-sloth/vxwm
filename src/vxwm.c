@@ -825,12 +825,12 @@ void bn_swap_tab(const arg_t *arg)
     case Prev:
       swp = fc->ft == 0 ? fc->nt - 1 : fc->ft - 1;
       break;
-    case This:
-      swp = fc->ft;
-      break;
     case Next:
       swp = fc->ft == fc->nt - 1 ? 0 : fc->ft + 1;
       break;
+    default:
+      xassert(false, "bad argument in bn_swap_tab");
+      return;
   }
   SWAP(fc->tab[swp], fc->tab[fc->ft])
   bn_focus_tab(arg);
@@ -838,9 +838,9 @@ void bn_swap_tab(const arg_t *arg)
 
 void bn_swap_cln(const arg_t *arg)
 {
-  client_t *p = NULL, *c;
+  client_t *p = NULL, *c = next_tiled(fm->cln);
 
-  if (!fc || arg->t == This)
+  if (!fc || fc->isfloat || !next_tiled(c->next))
     return;
 
   switch (arg->t) {
