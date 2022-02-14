@@ -10,7 +10,7 @@ all: clean vxwm
 %.o: $(SRCDIR)/%.c
 	$(CC) $(CFLAGS) -c $< -o $@
 
-vxwm: $(OBJ)
+vxwm: clean $(OBJ)
 	$(CC) $(LDFLAGS) $(OBJ) -o $@
 
 debug: CFLAGS += -DVXWM_DEBUG
