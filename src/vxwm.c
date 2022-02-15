@@ -137,6 +137,7 @@ static void bn_split_cln(const arg_t *);
 static void bn_focus_cln(const arg_t *);
 static void bn_focus_tab(const arg_t *);
 static void bn_focus_page(const arg_t *);
+static void bn_set_layout(const arg_t *);
 // layouts
 static void column(const monitor_t *, int, int *);
 static void stack(const monitor_t *, int, int *);
@@ -1107,6 +1108,14 @@ void bn_focus_page(const arg_t *arg)
 
   log("focus page %s", pages[arg->i].sym);
   fm->fp = arg->i;
+  arrange_mon(fm);
+}
+
+void bn_set_layout(const arg_t *arg)
+{
+  xassert(arg->i < (int)LENGTH(layouts), "bad call to bn_set_layout");
+
+  pages[fm->fp].lt = &layouts[arg->i];
   arrange_mon(fm);
 }
 
