@@ -472,8 +472,17 @@ void on_destroy_notify(xcb_generic_event_t *ge)
 void on_map_request(xcb_generic_event_t *ge)
 {
   xcb_map_request_event_t *e = (xcb_map_request_event_t *)ge;
+  xcb_get_window_attributes_cookie_t cookie;
+  xcb_get_window_attributes_reply_t *wa;
   client_t *c = win_to_cln(e->window);
 
+  cookie = xcb_get_window_attributes(conn, e->window);
+  wa = xcb_get_window_attributes_reply(conn, cookie, NULL);
+
+  if (!wa || wa->override_redirect) {
+    xfree(wa);
+    return;
+  }
   if (!c) {
     c = create_cln();
     attach_tab(c, e->window);
