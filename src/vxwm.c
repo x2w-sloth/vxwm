@@ -109,6 +109,7 @@ static void attach_cln(client_t *);
 static void detach_cln(client_t *);
 static void focus_cln(client_t *);
 static void raise_cln(client_t *);
+static void fullscr_cln(client_t *, bool);
 static void attach_tab(client_t *, xcb_window_t);
 static void detach_tab(client_t *, int);
 static void draw_tabs(client_t *);
@@ -511,9 +512,7 @@ void arrange_mon(monitor_t *m)
   for (c = next_inpage(m->cln), n = 0; c; c = next_inpage(c->next)) {
     // halts at the first client in page that wishes to be fullscreen
     if (c->isfullscr) {
-      stack_win(c->frame, Top);
-      border_cln(c, 0);
-      move_resize_cln(c, 0, 0, scr->width_in_pixels, scr->height_in_pixels);
+      fullscr_cln(c, true);
       xcb_flush(conn);
       return;
     }
@@ -652,6 +651,20 @@ void raise_cln(client_t *c)
   xassert(c, "bad call to raise_cln");
   stack_win(c->frame, Top);
   draw_tabs(c);
+}
+
+void fullscr_cln(client_t *c, bool fullscr)
+{
+  xassert(c, "bad call to fullscr_cln");
+
+  if (fullscr) {
+    stack_win(c->frame, Top);
+    border_cln(c, 0);
+    move_resize_cln(c, 0, 0, scr->width_in_pixels, scr->height_in_pixels);
+  } else {
+    border_cln(c, VXWM_CLN_BORDER_W);
+    move_resize_cln(c, c->px, c->py, c->pw, c->ph);
+  }
 }
 
 void attach_tab(client_t *c, xcb_window_t win)
@@ -936,11 +949,10 @@ void bn_toggle_fullscr(const arg_t *arg)
     return;
 
   if (fc->isfullscr) {
-    border_cln(fc, VXWM_CLN_BORDER_W);
-    move_resize_cln(fc, fc->px, fc->py, fc->pw, fc->ph);
-  }
-
-  fc->isfullscr = !fc->isfullscr;
+    fullscr_cln(fc, false);
+    fc->isfullscr = false;
+  } else
+    fc->isfullscr = true;
   arrange_mon(fm);
 }
 
