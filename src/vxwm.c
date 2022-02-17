@@ -1017,11 +1017,17 @@ void bn_split_cln(const arg_t *arg)
   xcb_window_t win;
   int i;
 
-  if (!fc || ns == 0)
+  if (!fc || (ns == 0 && fc->nt == 1))
     return;
 
-  for (c = next_selected(fm->cln); c; c = next_selected(c->next))
-    while (c->sel) {
+  if (ns == 0) { // split focus tab from focus client
+    sc = create_cln();
+    attach_cln(sc);
+    win = fc->tab[fc->ft];
+    detach_tab(fc, fc->ft);
+    attach_tab(sc, win);
+  } else for (c = next_selected(fm->cln); c; c = next_selected(c->next))
+    while (c->sel) { // consume selection
       if (c->nt == 1) {
         --ns;
         c->sel = 0;
@@ -1035,7 +1041,7 @@ void bn_split_cln(const arg_t *arg)
       attach_tab(sc, win);
     }
   xassert(ns == 0, "bad selection counting");
-  focus_cln(sc);
+  focus_cln(sc ? sc : fc);
   arrange_mon(fm);
 }
 
