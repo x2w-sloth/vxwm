@@ -113,6 +113,7 @@ static void fullscr_cln(client_t *, bool);
 static void attach_tab(client_t *, xcb_window_t);
 static void detach_tab(client_t *, int);
 static void draw_tabs(client_t *);
+static void kill_tab(xcb_window_t);
 static void move_cln(client_t *, int, int);
 static void resize_cln(client_t *, int, int);
 static void move_resize_cln(client_t *, int, int, int, int);
@@ -716,6 +717,14 @@ void draw_tabs(client_t *c)
   draw_copy(c->frame, 0, 0, c->w, VXWM_TAB_HEIGHT);
 }
 
+void kill_tab(xcb_window_t win)
+{
+  if (has_proto(win, wm_atom[WmDeleteWindow]))
+    send_msg(win, wm_atom[WmDeleteWindow]);
+  else
+    xcb_kill_client(conn, win);
+}
+
 void move_cln(client_t *c, int x, int y)
 {
   xassert(c, "bad call to move_cln");
@@ -820,13 +829,18 @@ void bn_spawn(const arg_t *arg)
 void bn_kill_tab(const arg_t *arg)
 {
   UNUSED(arg);
+  client_t *c;
+  int i;
+
   if (!fc)
     return;
 
-  if (has_proto(fc->tab[fc->ft], wm_atom[WmDeleteWindow]))
-    send_msg(fc->tab[fc->ft], wm_atom[WmDeleteWindow]);
-  else
-    xcb_kill_client(conn, fc->tab[fc->ft]);
+  if (ns > 0) { // consume selection
+    for (c = next_selected(fm->cln); c; c = next_selected(c->next))
+      for (i = 0; i < c->nt; ++i) if (c->sel & (1 << i))
+        kill_tab(c->tab[i]);
+  } else
+    kill_tab(fc->tab[fc->ft]);
   xcb_flush(conn);
 }
 
