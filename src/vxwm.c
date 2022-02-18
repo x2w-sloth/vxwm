@@ -870,6 +870,7 @@ void bn_swap_tab(const arg_t *arg)
       xassert(false, "bad argument in bn_swap_tab");
       return;
   }
+  SWAP_BITS(fc->sel, swp, fc->ft);
   SWAP(fc->tab[swp], fc->tab[fc->ft])
   bn_focus_tab(arg);
 }
