@@ -75,7 +75,7 @@ enum {
   NetAtomsLast,
 };
 
-static void cmdline(int argc, char **argv);
+static void args(int, char **);
 static void setup(void);
 static void run(void);
 static void cleanup(void);
@@ -87,6 +87,7 @@ static void grab_keys(void);
 static void ptr_motion(ptr_state_t);
 static bool has_proto(xcb_window_t, xcb_atom_t);
 static void send_msg(xcb_window_t, xcb_atom_t);
+static bool get_text_prop(xcb_window_t, xcb_atom_t, char *, size_t);
 static void stack_win(xcb_window_t, target_t);
 static void focus_win(xcb_window_t);
 // event handlers
@@ -167,7 +168,7 @@ xcb_window_t root;
 // will exist until lua configuration is implemented
 #include "config.h"
 
-void cmdline(int argc, char **argv)
+void args(int argc, char **argv)
 {
   if (argc > 1) {
     if (!strcmp(argv[1], "-v"))
@@ -374,6 +375,26 @@ void send_msg(xcb_window_t win, xcb_atom_t proto)
   msg.data.data32[0] = proto;
   msg.data.data32[1] = XCB_TIME_CURRENT_TIME;
   xcb_send_event(conn, false, win, XCB_EVENT_MASK_NO_EVENT, (const char *)&msg);
+}
+
+bool get_text_prop(xcb_window_t win, xcb_atom_t prop, char *text, size_t tsize)
+{
+  xcb_get_property_reply_t *reply;
+  xcb_get_property_cookie_t cookie;
+  size_t rsize;
+  const char *buf;
+
+  if (!text || tsize == 0)
+    return false;
+  cookie = xcb_get_property(conn, 0, win, prop, XCB_GET_PROPERTY_TYPE_ANY, 0, UINT8_MAX);
+  reply = xcb_get_property_reply(conn, cookie, NULL);
+  if (!reply || (rsize = xcb_get_property_value_length(reply)) == 0 || rsize > tsize)
+    return false;
+  buf = xcb_get_property_value(reply);
+  strncpy(text, buf, rsize);
+  text[rsize] = '\0';
+  xfree(reply);
+  return true;
 }
 
 void stack_win(xcb_window_t win, target_t t)
@@ -1224,7 +1245,7 @@ void stack(const monitor_t *m, int n, int *par)
 
 int main(int argc, char *argv[])
 {
-  cmdline(argc, argv);
+  args(argc, argv);
   setup();
   run();
   cleanup();
