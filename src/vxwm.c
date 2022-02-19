@@ -93,6 +93,7 @@ static xcb_atom_t get_atom_prop(xcb_window_t, xcb_atom_t);
 static bool get_text_prop(xcb_window_t, xcb_atom_t, char *, size_t);
 static void stack_win(xcb_window_t, target_t);
 static void focus_win(xcb_window_t);
+static void grant_configure_request(xcb_configure_request_event_t *);
 // event handlers
 static void on_key_press(xcb_generic_event_t *);
 static void on_button_press(xcb_generic_event_t *);
@@ -100,6 +101,7 @@ static void on_motion_notify(xcb_generic_event_t *);
 static void on_expose(xcb_generic_event_t *);
 static void on_destroy_notify(xcb_generic_event_t *);
 static void on_map_request(xcb_generic_event_t *);
+static void on_configure_request(xcb_generic_event_t *);
 // monitors and pages
 static monitor_t *create_mon(void);
 static void delete_mon(monitor_t *);
@@ -227,6 +229,7 @@ void setup(void)
   handler[XCB_DESTROY_NOTIFY]  = on_destroy_notify;
 //handler[XCB_UNMAP_NOTIFY]    = on_unmap_notify;
   handler[XCB_MAP_REQUEST]     = on_map_request;
+  handler[XCB_CONFIGURE_REQUEST] = on_configure_request;
 //handler[XCB_PROPERTY_NOTIFY] = on_property_notify;
 //handler[XCB_CLIENT_MESSAGE]  = on_client_message;
 //handler[XCB_MAPPING_NOTIFY]  = on_mapping_notify;
@@ -430,6 +433,42 @@ void focus_win(xcb_window_t win)
   xcb_set_input_focus(conn, XCB_INPUT_FOCUS_POINTER_ROOT, win, XCB_CURRENT_TIME);
 }
 
+void grant_configure_request(xcb_configure_request_event_t *e)
+{
+  int i = 0;
+  masks = 0;
+  // configure non-client window as requested
+  if (e->value_mask & XCB_CONFIG_WINDOW_X) {
+    masks |= XCB_CONFIG_WINDOW_X;
+    vals[i++] = e->x;
+  }
+  if (e->value_mask & XCB_CONFIG_WINDOW_Y) {
+    masks |= XCB_CONFIG_WINDOW_Y;
+    vals[i++] = e->y;
+  }
+  if (e->value_mask & XCB_CONFIG_WINDOW_WIDTH) {
+    masks |= XCB_CONFIG_WINDOW_WIDTH;
+    vals[i++] = e->width;
+  }
+  if (e->value_mask & XCB_CONFIG_WINDOW_HEIGHT) {
+    masks |= XCB_CONFIG_WINDOW_HEIGHT;
+    vals[i++] = e->height;
+  }
+  if (e->value_mask & XCB_CONFIG_WINDOW_BORDER_WIDTH) {
+    masks |= XCB_CONFIG_WINDOW_BORDER_WIDTH;
+    vals[i++] = e->border_width;
+  }
+  if (e->value_mask & XCB_CONFIG_WINDOW_SIBLING) {
+    masks |= XCB_CONFIG_WINDOW_SIBLING;
+    vals[i++] = e->sibling;
+  }
+  if (e->value_mask & XCB_CONFIG_WINDOW_STACK_MODE) {
+    masks |= XCB_CONFIG_WINDOW_STACK_MODE;
+    vals[i++] = e->stack_mode;
+  }
+  xcb_configure_window(conn, e->window, masks, vals);
+}
+
 void on_key_press(xcb_generic_event_t *ge)
 {
   xcb_key_press_event_t *e = (xcb_key_press_event_t *)ge;
@@ -515,6 +554,7 @@ void on_map_request(xcb_generic_event_t *ge)
   xcb_map_request_event_t *e = (xcb_map_request_event_t *)ge;
   xcb_get_window_attributes_cookie_t cookie;
   xcb_get_window_attributes_reply_t *wa;
+  xcb_atom_t win_type;
   client_t *c = win_to_cln(e->window);
 
   cookie = xcb_get_window_attributes(conn, e->window);
@@ -528,11 +568,43 @@ void on_map_request(xcb_generic_event_t *ge)
     c = create_cln();
     attach_tab(c, e->window);
     attach_cln(c);
+    win_type = get_atom_prop(c->tab[c->ft], net_atom[NetWmWindowType]);
+    if (win_type == net_atom[NetWmWindowTypeDialog])
+      c->isfloat = true;
     arrange_mon(fm);
     xcb_map_window(conn, e->window);
     focus_cln(c);
     xcb_flush(conn);
   }
+}
+
+void on_configure_request(xcb_generic_event_t *ge)
+{
+  xcb_configure_request_event_t *e = (xcb_configure_request_event_t *)ge;
+  client_t *c;
+  int x, y, w, h;
+
+  if ((c = win_to_cln(e->window)) && c->isfloat) {
+    xassert(e->window == c->tab[c->ft], "configured window is not focus tab");
+    x = c->x;
+    y = c->y;
+    w = c->w;
+    h = c->h;
+    if (e->value_mask & XCB_CONFIG_WINDOW_X)
+      x = e->x;
+    if (e->value_mask & XCB_CONFIG_WINDOW_Y)
+      y = e->y;
+    if (e->value_mask & (XCB_CONFIG_WINDOW_X | XCB_CONFIG_WINDOW_Y))
+      move_cln(c, x, y);
+    if (e->value_mask & XCB_CONFIG_WINDOW_WIDTH)
+      w = e->width;
+    if (e->value_mask & XCB_CONFIG_WINDOW_HEIGHT)
+      h = e->height;
+    if (e->value_mask & (XCB_CONFIG_WINDOW_WIDTH | XCB_CONFIG_WINDOW_HEIGHT))
+      resize_cln(c, w, h);
+  } else
+    grant_configure_request(e);
+  xcb_flush(conn);
 }
 
 monitor_t *create_mon(void)
