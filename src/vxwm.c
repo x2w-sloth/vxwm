@@ -72,6 +72,8 @@ enum {
 
 enum {
   NetWmName = 0,
+  NetWmWindowType,
+  NetWmWindowTypeDialog,
   NetAtomsLast,
 };
 
@@ -87,6 +89,7 @@ static void grab_keys(void);
 static void ptr_motion(ptr_state_t);
 static bool has_proto(xcb_window_t, xcb_atom_t);
 static void send_msg(xcb_window_t, xcb_atom_t);
+static xcb_atom_t get_atom_prop(xcb_window_t, xcb_atom_t);
 static bool get_text_prop(xcb_window_t, xcb_atom_t, char *, size_t);
 static void stack_win(xcb_window_t, target_t);
 static void focus_win(xcb_window_t);
@@ -159,8 +162,8 @@ static bool ptr_first_motion;
 static bool running;
 static int ptr_x, ptr_y;
 static int win_x, win_y, win_w, win_h;
-static int vals[8], masks;
 static int ns;
+static uint32_t vals[8], masks;
 xcb_connection_t *conn;
 xcb_screen_t *scr;
 xcb_window_t root;
@@ -270,6 +273,8 @@ void atom_request(void)
   wm_cookies[WmTakeFocus]    = xcb_intern_atom(conn, false, ATOM_NAME("WM_TAKE_FOCUS"));
   wm_cookies[WmDeleteWindow] = xcb_intern_atom(conn, false, ATOM_NAME("WM_DELETE_WINDOW"));
   net_cookies[NetWmName]     = xcb_intern_atom(conn, false, ATOM_NAME("_NET_WM_NAME"));
+  net_cookies[NetWmWindowType] = xcb_intern_atom(conn, false, ATOM_NAME("_NET_WM_WINDOW_TYPE"));
+  net_cookies[NetWmWindowTypeDialog] = xcb_intern_atom(conn, false, ATOM_NAME("_NET_WM_WINDOW_TYPE_DIALOG"));
 }
 
 void atom_setup(void)
@@ -375,6 +380,20 @@ void send_msg(xcb_window_t win, xcb_atom_t proto)
   msg.data.data32[0] = proto;
   msg.data.data32[1] = XCB_TIME_CURRENT_TIME;
   xcb_send_event(conn, false, win, XCB_EVENT_MASK_NO_EVENT, (const char *)&msg);
+}
+
+xcb_atom_t get_atom_prop(xcb_window_t win, xcb_atom_t prop)
+{
+  xcb_get_property_reply_t *reply;
+  xcb_get_property_cookie_t cookie;
+  xcb_atom_t *atom;
+  
+  cookie = xcb_get_property(conn, 0, win, prop, XCB_ATOM_ATOM, 0, UINT32_MAX);
+  reply = xcb_get_property_reply(conn, cookie, NULL);
+  if (!reply || !(atom = xcb_get_property_value(reply)))
+    return XCB_ATOM_NONE;
+  xfree(reply);
+  return *atom;
 }
 
 bool get_text_prop(xcb_window_t win, xcb_atom_t prop, char *text, size_t tsize)
