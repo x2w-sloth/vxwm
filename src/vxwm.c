@@ -12,7 +12,6 @@
 #include "global.h"
 #include "util.h"
 #include "draw.h"
-
 // a monitor corresponds to a physical display and contains pages
 struct monitor {
   monitor_t *next;     // monitor linked list
@@ -40,6 +39,7 @@ struct client {
   xcb_window_t *tab;   // window tabs
   uint32_t tag;        // page tag bitmask
   uint32_t sel;        // tab selection bitmask
+  uint8_t tcap;        // maximum tab capacity
   int nt, ft;          // number of tabs, index of focus tab
   int x, y, w, h;      // client dimensions
   int px, py, pw, ph;  // previous client dimensions
@@ -602,7 +602,7 @@ void on_configure_request(xcb_generic_event_t *ge)
       h = e->height;
     if (e->value_mask & (XCB_CONFIG_WINDOW_WIDTH | XCB_CONFIG_WINDOW_HEIGHT))
       resize_cln(c, w, h);
-  } else
+  } else if (!c)
     grant_configure_request(e);
   xcb_flush(conn);
 }
@@ -661,9 +661,10 @@ client_t *create_cln()
 
   c = xmalloc(sizeof(client_t));
   c->next = NULL;
-  c->tab = xmalloc(sizeof(xcb_window_t) * VXWM_TAB_CAPACITY);
+  c->tab = xmalloc(sizeof(xcb_window_t));
   c->tag = 1 << fm->fp;
   c->sel = 0;
+  c->tcap = 1;
   c->nt = 0;
   c->ft = 0;
   c->isfloat = false;
@@ -791,7 +792,10 @@ void fullscr_cln(client_t *c, bool fullscr)
 
 void attach_tab(client_t *c, xcb_window_t win)
 {
-  xassert(c->nt < VXWM_TAB_CAPACITY, "at max tab capactiy");
+  if (c->nt == c->tcap) {
+    c->tcap <<= 1;
+    c->tab = xrealloc(c->tab, sizeof(xcb_window_t) * c->tcap);
+  }
   c->tab[c->nt++] = win;
   xcb_reparent_window(conn, win, c->frame, 0, VXWM_TAB_HEIGHT);
 }

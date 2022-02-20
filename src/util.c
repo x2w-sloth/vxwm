@@ -78,6 +78,14 @@ void *xmalloc(size_t size)
   return mem;
 }
 
+void *xrealloc(void *mem, size_t new_size)
+{
+  void *new_mem = realloc(mem, new_size);
+  if (!new_mem)
+    die("failed to reallocate memory");
+  return new_mem;
+}
+
 void xfree(void *mem)
 {
   if (!mem)

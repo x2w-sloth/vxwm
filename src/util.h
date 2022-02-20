@@ -35,6 +35,7 @@ void log_event(xcb_generic_event_t *);
 #endif // VXWM_DEBUG
 
 void *xmalloc(size_t);
+void *xrealloc(void *, size_t);
 void xfree(void *);
 void die(const char *);
 
