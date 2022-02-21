@@ -198,7 +198,7 @@ void setup(void)
     die("failed to capture screen");
 
   // configure root window, check if another wm is running
-  root = scr->root; log("root window: %d", root);
+  root = scr->root;
   masks = XCB_EVENT_MASK_SUBSTRUCTURE_NOTIFY | XCB_EVENT_MASK_SUBSTRUCTURE_REDIRECT;
   cookie = xcb_change_window_attributes_checked(conn, root, XCB_CW_EVENT_MASK, &masks);
   error = xcb_request_check(conn, cookie);
@@ -285,7 +285,7 @@ void atom_setup(void)
   xcb_intern_atom_reply_t *reply;
   int i;
 
-  for (i = 0; i < WmAtomsLast; ++i)
+  for (i = 0; i < WmAtomsLast; i++)
     if ((reply = xcb_intern_atom_reply(conn, wm_cookies[i], NULL))) {
       wm_atom[i] = reply->atom;
       xfree(reply);
@@ -293,7 +293,7 @@ void atom_setup(void)
       log("failed to retreive wm atom from server");
     }
 
-  for (i = 0; i < NetAtomsLast; ++i)
+  for (i = 0; i < NetAtomsLast; i++)
     if ((reply = xcb_intern_atom_reply(conn, net_cookies[i], NULL))) {
       net_atom[i] = reply->atom;
       xfree(reply);
@@ -322,9 +322,9 @@ void grab_keys(void)
   int i, j, n;
 
   xcb_ungrab_key(conn, XCB_GRAB_ANY, root, XCB_MOD_MASK_ANY);
-  for (i = 0, n = LENGTH(keybinds); i < n; ++i) {
+  for (i = 0, n = LENGTH(keybinds); i < n; i++) {
     keycodes = keysym_to_keycodes(keybinds[i].sym);
-    for (j = 0; keycodes[j] != XCB_NO_SYMBOL; ++j)
+    for (j = 0; keycodes[j] != XCB_NO_SYMBOL; j++)
       xcb_grab_key(conn, 1, root, keybinds[i].mod, keycodes[j],
                    XCB_GRAB_MODE_ASYNC, XCB_GRAB_MODE_ASYNC);
     xfree(keycodes);
@@ -333,8 +333,6 @@ void grab_keys(void)
 
 void ptr_motion(ptr_state_t state)
 {
-  xassert(state == PtrMoveCln || state == PtrResizeCln, "bad pointer state");
-
   xcb_query_pointer_reply_t *ptr;
   xcb_get_geometry_reply_t *geo;
 
@@ -367,7 +365,7 @@ bool has_proto(xcb_window_t win, xcb_atom_t proto)
     return false;
   }
 
-  for (i = 0, n = reply.atoms_len; i < n && reply.atoms[i] != proto; ++i) ;
+  for (i = 0, n = reply.atoms_len; i < n && reply.atoms[i] != proto; i++) ;
   xcb_icccm_get_wm_protocols_reply_wipe(&reply);
   return i != n;
 }
@@ -475,7 +473,7 @@ void on_key_press(xcb_generic_event_t *ge)
   xcb_keysym_t keysym = keycode_to_keysym(e->detail);
   int i, n;
 
-  for (i = 0, n = LENGTH(keybinds); i < n; ++i)
+  for (i = 0, n = LENGTH(keybinds); i < n; i++)
     if (keysym == keybinds[i].sym && e->state == keybinds[i].mod && keybinds[i].fn)
       keybinds[i].fn(&keybinds[i].arg);
 }
@@ -486,7 +484,7 @@ void on_button_press(xcb_generic_event_t *ge)
   int i, n;
 
   cln_set_focus(win_to_cln(e->event));
-  for (i = 0, n = LENGTH(btnbinds); i < n; ++i)
+  for (i = 0, n = LENGTH(btnbinds); i < n; i++)
     if (e->detail == btnbinds[i].btn && e->state == btnbinds[i].mod && btnbinds[i].fn) {
       ptr_first_motion = true;
       btnbinds[i].fn(&btnbinds[i].arg);
@@ -535,7 +533,7 @@ void on_destroy_notify(xcb_generic_event_t *ge)
   if (!c)
     return;
 
-  for (i = 0; c->tab[i] != e->window; ++i) ;
+  for (i = 0; c->tab[i] != e->window; i++) ;
   tab_detach(c, i);
   if (c->nt == 0) {
     if (fc == c) {
@@ -628,11 +626,10 @@ void mon_delete(monitor_t *m)
 
 void mon_arrange(monitor_t *m)
 {
-  xassert(m, "bad call to mon_arrange");
   client_t *c;
-  int n;
+  int n = 0;
 
-  for (c = next_inpage(m->cln), n = 0; c; c = next_inpage(c->next)) {
+  for (c = next_inpage(m->cln); c; c = next_inpage(c->next)) {
     // halts at the first client in page that wishes to be fullscreen
     if (c->isfullscr) {
       cln_set_fullscr(c, true);
@@ -642,7 +639,7 @@ void mon_arrange(monitor_t *m)
     // restack clients, count tiled clients
     if (!c->isfloating) {
       win_stack(c->frame, Bottom);
-      ++n;
+      n++;
     } else
       win_stack(c->frame, Top);
   }
@@ -695,8 +692,6 @@ void cln_delete(client_t *c)
 
 void cln_set_border(client_t *c, int width)
 {
-  xassert(c && width >= 0, "bad call to cln_set_border");
-
   masks = XCB_CONFIG_WINDOW_BORDER_WIDTH;
   xcb_configure_window(conn, c->frame, masks, &width);
 }
@@ -722,7 +717,7 @@ void cln_add_frame(client_t *c)
   masks = XCB_EVENT_MASK_BUTTON_PRESS |
           XCB_EVENT_MASK_BUTTON_RELEASE |
           XCB_EVENT_MASK_BUTTON_MOTION;
-  for (i = 0, n = LENGTH(btnbinds); i < n; ++i)
+  for (i = 0, n = LENGTH(btnbinds); i < n; i++)
     xcb_grab_button(conn, 0, c->frame, masks, XCB_GRAB_MODE_ASYNC, XCB_GRAB_MODE_ASYNC,
                     XCB_NONE, XCB_NONE, btnbinds[i].btn, btnbinds[i].mod);
 }
@@ -772,15 +767,12 @@ void cln_set_focus(client_t *c)
 
 void cln_raise(client_t *c)
 {
-  xassert(c, "bad call to cln_raise");
   win_stack(c->frame, Top);
   tab_draw(c);
 }
 
 void cln_set_fullscr(client_t *c, bool fullscr)
 {
-  xassert(c, "bad call to cln_set_fullscr");
-
   if (fullscr) {
     win_stack(c->frame, Top);
     cln_set_border(c, 0);
@@ -807,13 +799,13 @@ void tab_detach(client_t *c, int i)
   uint32_t lsb;
 
   if (c->sel & (1 << i))
-    --ns;
+    ns--;
   
   // preserve selection mask
   lsb = (1 << i) - 1;
   c->sel = ((c->sel >> 1) & ~lsb) + (c->sel & lsb);
 
-  for (; i < c->nt - 1; ++i)
+  for (; i < c->nt - 1; i++)
     c->tab[i] = c->tab[i + 1];
   c->nt--;
   c->ft = MAX(c->ft - 1, 0);
@@ -828,7 +820,7 @@ void tab_draw(client_t *c)
   draw_rect(0, 0, c->w, VXWM_TAB_HEIGHT, VXWM_TAB_NORMAL_CLR);
   if (c == fc)
     draw_rect(tw * c->ft, 0, tw, VXWM_TAB_HEIGHT, VXWM_TAB_FOCUS_CLR);
-  for (i = 0; i < c->nt; ++i)
+  for (i = 0; i < c->nt; i++)
     if (c->sel & (1 << i))
       draw_rect((i + 0.25) * tw, sw / 2, tw / 2, sw, VXWM_TAB_SELECT_CLR);
   draw_copy(c->frame, 0, 0, c->w, VXWM_TAB_HEIGHT);
@@ -844,8 +836,6 @@ void tab_kill(xcb_window_t win)
 
 void cln_move(client_t *c, int x, int y)
 {
-  xassert(c, "bad call to cln_move");
-
   c->px = c->x;
   c->py = c->y;
   masks = XCB_CONFIG_WINDOW_X | XCB_CONFIG_WINDOW_Y;
@@ -856,11 +846,8 @@ void cln_move(client_t *c, int x, int y)
 
 void cln_resize(client_t *c, int w, int h)
 {
-  xassert(c, "bad call to cln_resize");
-
   if (w < VXWM_CLN_MIN_W || h < VXWM_CLN_MIN_H)
     return;
-
   c->pw = c->w;
   c->ph = c->h;
   masks = XCB_CONFIG_WINDOW_WIDTH | XCB_CONFIG_WINDOW_HEIGHT;
@@ -917,7 +904,7 @@ client_t *win_to_cln(xcb_window_t win)
   for (c = fm->cln; c; c = c->next) {
     if (c->frame == win)
       return c;
-    for (i = 0; i < c->nt; ++i)
+    for (i = 0; i < c->nt; i++)
       if (c->tab[i] == win)
         return c;
   }
@@ -954,7 +941,7 @@ void bn_kill_tab(const arg_t *arg)
 
   if (ns > 0) { // consume selection
     for (c = next_selected(fm->cln); c; c = next_selected(c->next))
-      for (i = 0; i < c->nt; ++i) if (c->sel & (1 << i))
+      for (i = 0; i < c->nt; i++) if (c->sel & (1 << i))
         tab_kill(c->tab[i]);
   } else
     tab_kill(fc->tab[fc->ft]);
@@ -1121,7 +1108,7 @@ void bn_merge_cln(const arg_t *arg)
   c = next_selected(fm->cln);
   while (c) {
     while (c->sel) {
-      for (i = 0; !(c->sel & (1 << i)); ++i) ;
+      for (i = 0; !(c->sel & (1 << i)); i++) ;
       win = c->tab[i];
       tab_detach(c, i);
       tab_attach(mc, win);
@@ -1161,13 +1148,13 @@ void bn_split_cln(const arg_t *arg)
   } else for (c = next_selected(fm->cln); c; c = next_selected(c->next))
     while (c->sel) { // consume selection
       if (c->nt == 1) {
-        --ns;
+        ns--;
         c->sel = 0;
         break;
       }
       sc = cln_create();
       cln_attach(sc);
-      for (i = 0; !(c->sel & (1 << i)); ++i) ;
+      for (i = 0; !(c->sel & (1 << i)); i++) ;
       win = c->tab[i];
       tab_detach(c, i);
       tab_attach(sc, win);
@@ -1282,7 +1269,6 @@ void bn_set_param(const arg_t *arg)
 void bn_set_layout(const arg_t *arg)
 {
   xassert(arg->i < (int)LENGTH(layouts), "bad call to bn_set_layout");
-
   pages[fm->fp].lt = &layouts[arg->i];
   mon_arrange(fm);
 }
@@ -1304,7 +1290,7 @@ void column(const monitor_t *m, int n, int *par)
   colw = scrw / cols;
   h = scrh / (n - cols + 1);
 
-  for (c = next_tiled(m->cln), i = 0; c; c = next_tiled(c->next), ++i)
+  for (c = next_tiled(m->cln), i = 0; c; c = next_tiled(c->next), i++)
     if (i < cols - 1)
       cln_move_resize(c, i * colw, 0, colw - BORDER, scrh - BORDER);
     else
@@ -1332,7 +1318,7 @@ void stack(const monitor_t *m, int n, int *par)
   } else
     lw = rw = scrw / 2;
 
-  for (c = next_tiled(m->cln), i = 0; c; c = next_tiled(c->next), ++i)
+  for (c = next_tiled(m->cln), i = 0; c; c = next_tiled(c->next), i++)
     if (i < ln)
       cln_move_resize(c, 0, scrh / ln * i, lw - BORDER, scrh / ln - BORDER);
     else
