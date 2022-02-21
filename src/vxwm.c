@@ -43,7 +43,7 @@ struct client {
   int nt, ft;          // number of tabs, index of focus tab
   int x, y, w, h;      // client dimensions
   int px, py, pw, ph;  // previous client dimensions
-  bool isfloat;        // client is floating
+  bool isfloating;     // client is floating
   bool isfullscr;      // client wishes to be fullscreen
 };
 
@@ -91,8 +91,8 @@ static bool has_proto(xcb_window_t, xcb_atom_t);
 static void send_msg(xcb_window_t, xcb_atom_t);
 static xcb_atom_t get_atom_prop(xcb_window_t, xcb_atom_t);
 static bool get_text_prop(xcb_window_t, xcb_atom_t, char *, size_t);
-static void stack_win(xcb_window_t, target_t);
-static void focus_win(xcb_window_t);
+static void win_stack(xcb_window_t, target_t);
+static void win_focus(xcb_window_t);
 static void grant_configure_request(xcb_configure_request_event_t *);
 // event handlers
 static void on_key_press(xcb_generic_event_t *);
@@ -103,26 +103,26 @@ static void on_destroy_notify(xcb_generic_event_t *);
 static void on_map_request(xcb_generic_event_t *);
 static void on_configure_request(xcb_generic_event_t *);
 // monitors and pages
-static monitor_t *create_mon(void);
-static void delete_mon(monitor_t *);
-static void arrange_mon(monitor_t *);
+static monitor_t *mon_create(void);
+static void mon_delete(monitor_t *);
+static void mon_arrange(monitor_t *);
 // clients and tabs
-static client_t *create_cln(void);
-static void delete_cln(client_t *);
-static void border_cln(client_t *, int);
-static void frame_cln(client_t *);
-static void attach_cln(client_t *);
-static void detach_cln(client_t *);
-static void focus_cln(client_t *);
-static void raise_cln(client_t *);
-static void fullscr_cln(client_t *, bool);
-static void attach_tab(client_t *, xcb_window_t);
-static void detach_tab(client_t *, int);
-static void draw_tabs(client_t *);
-static void kill_tab(xcb_window_t);
-static void move_cln(client_t *, int, int);
-static void resize_cln(client_t *, int, int);
-static void move_resize_cln(client_t *, int, int, int, int);
+static client_t *cln_create(void);
+static void cln_delete(client_t *);
+static void cln_set_border(client_t *, int);
+static void cln_add_frame(client_t *);
+static void cln_attach(client_t *);
+static void cln_detach(client_t *);
+static void cln_set_focus(client_t *);
+static void cln_raise(client_t *);
+static void cln_set_fullscr(client_t *, bool);
+static void cln_move(client_t *, int, int);
+static void cln_resize(client_t *, int, int);
+static void cln_move_resize(client_t *, int, int, int, int);
+static void tab_attach(client_t *, xcb_window_t);
+static void tab_detach(client_t *, int);
+static void tab_draw(client_t *);
+static void tab_kill(xcb_window_t);
 static client_t *next_inpage(client_t *);
 static client_t *prev_inpage(client_t *);
 static client_t *next_tiled(client_t *);
@@ -207,7 +207,7 @@ void setup(void)
     die("another window manager is running");
 
   // setup monitors and initialize drawing context
-  fm = create_mon();
+  fm = mon_create();
   draw_setup();
 
   // reqeust atoms, load symbols and grab keys on root window
@@ -262,7 +262,7 @@ void cleanup(void)
   // TODO: kill remaining clients
 
   // free resources and disconnect
-  delete_mon(fm);
+  mon_delete(fm);
   if (symbols)
     xcb_key_symbols_free(symbols);
   if (conn && !xcb_connection_has_error(conn))
@@ -419,14 +419,14 @@ bool get_text_prop(xcb_window_t win, xcb_atom_t prop, char *text, size_t tsize)
   return true;
 }
 
-void stack_win(xcb_window_t win, target_t t)
+void win_stack(xcb_window_t win, target_t t)
 {
   masks = XCB_CONFIG_WINDOW_STACK_MODE;
   vals[0] = t == Top ? XCB_STACK_MODE_ABOVE : XCB_STACK_MODE_BELOW;
   xcb_configure_window(conn, win, masks, vals);
 }
 
-void focus_win(xcb_window_t win)
+void win_focus(xcb_window_t win)
 {
   if (win != root && has_proto(win, wm_atom[WmTakeFocus]))
     send_msg(win, wm_atom[WmTakeFocus]);
@@ -485,7 +485,7 @@ void on_button_press(xcb_generic_event_t *ge)
   xcb_button_press_event_t *e = (xcb_button_press_event_t *)ge;
   int i, n;
 
-  focus_cln(win_to_cln(e->event));
+  cln_set_focus(win_to_cln(e->event));
   for (i = 0, n = LENGTH(btnbinds); i < n; ++i)
     if (e->detail == btnbinds[i].btn && e->state == btnbinds[i].mod && btnbinds[i].fn) {
       ptr_first_motion = true;
@@ -504,15 +504,15 @@ void on_motion_notify(xcb_generic_event_t *ge)
 
   if (ptr_first_motion) {
     ptr_first_motion = false;
-    fc->isfloat = true;
-    arrange_mon(fm);
+    fc->isfloating = true;
+    mon_arrange(fm);
   }
 
   dx = e->root_x - ptr_x;
   dy = e->root_y - ptr_y;
   xw = (move_or_resize ? win_x : win_w) + dx;
   yh = (move_or_resize ? win_y : win_h) + dy;
-  (move_or_resize ? move_cln : resize_cln)(fc, xw, yh);
+  (move_or_resize ? cln_move : cln_resize)(fc, xw, yh);
   xcb_flush(conn);
 }
 
@@ -522,7 +522,7 @@ void on_expose(xcb_generic_event_t *ge)
   client_t *c = win_to_cln(e->window);
 
   if (c)
-    draw_tabs(c);
+    tab_draw(c);
 }
 
 void on_destroy_notify(xcb_generic_event_t *ge)
@@ -536,15 +536,15 @@ void on_destroy_notify(xcb_generic_event_t *ge)
     return;
 
   for (i = 0; c->tab[i] != e->window; ++i) ;
-  detach_tab(c, i);
+  tab_detach(c, i);
   if (c->nt == 0) {
     if (fc == c) {
-      fc = NULL; // so we don't call draw_tabs with 0 tabs, inside focus_cln
-      focus_cln(c->next ? c->next : prev_cln(c));
+      fc = NULL; // so we don't call tab_draw with 0 tabs, inside cln_set_focus
+      cln_set_focus(c->next ? c->next : prev_cln(c));
     }
-    detach_cln(c);
-    delete_cln(c);
-    arrange_mon(fm);
+    cln_detach(c);
+    cln_delete(c);
+    mon_arrange(fm);
   } else
     bn_focus_tab(&arg);
 }
@@ -564,16 +564,17 @@ void on_map_request(xcb_generic_event_t *ge)
     xfree(wa);
     return;
   }
+  xfree(wa);
   if (!c) {
-    c = create_cln();
-    attach_tab(c, e->window);
-    attach_cln(c);
+    c = cln_create();
+    tab_attach(c, e->window);
+    cln_attach(c);
     win_type = get_atom_prop(c->tab[c->ft], net_atom[NetWmWindowType]);
     if (win_type == net_atom[NetWmWindowTypeDialog])
-      c->isfloat = true;
-    arrange_mon(fm);
+      c->isfloating = true;
+    mon_arrange(fm);
     xcb_map_window(conn, e->window);
-    focus_cln(c);
+    cln_set_focus(c);
     xcb_flush(conn);
   }
 }
@@ -584,7 +585,7 @@ void on_configure_request(xcb_generic_event_t *ge)
   client_t *c;
   int x, y, w, h;
 
-  if ((c = win_to_cln(e->window)) && c->isfloat) {
+  if ((c = win_to_cln(e->window)) && c->isfloating) {
     xassert(e->window == c->tab[c->ft], "configured window is not focus tab");
     x = c->x;
     y = c->y;
@@ -595,19 +596,19 @@ void on_configure_request(xcb_generic_event_t *ge)
     if (e->value_mask & XCB_CONFIG_WINDOW_Y)
       y = e->y;
     if (e->value_mask & (XCB_CONFIG_WINDOW_X | XCB_CONFIG_WINDOW_Y))
-      move_cln(c, x, y);
+      cln_move(c, x, y);
     if (e->value_mask & XCB_CONFIG_WINDOW_WIDTH)
       w = e->width;
     if (e->value_mask & XCB_CONFIG_WINDOW_HEIGHT)
       h = e->height;
     if (e->value_mask & (XCB_CONFIG_WINDOW_WIDTH | XCB_CONFIG_WINDOW_HEIGHT))
-      resize_cln(c, w, h);
+      cln_resize(c, w, h);
   } else if (!c)
     grant_configure_request(e);
   xcb_flush(conn);
 }
 
-monitor_t *create_mon(void)
+monitor_t *mon_create(void)
 {
   monitor_t *m;
 
@@ -619,31 +620,31 @@ monitor_t *create_mon(void)
   return m;
 }
 
-void delete_mon(monitor_t *m)
+void mon_delete(monitor_t *m)
 {
   // xassert(!m->cln, "deleting a monitor with clients");
   xfree(m);
 }
 
-void arrange_mon(monitor_t *m)
+void mon_arrange(monitor_t *m)
 {
-  xassert(m, "bad call to arrange_mon");
+  xassert(m, "bad call to mon_arrange");
   client_t *c;
   int n;
 
   for (c = next_inpage(m->cln), n = 0; c; c = next_inpage(c->next)) {
     // halts at the first client in page that wishes to be fullscreen
     if (c->isfullscr) {
-      fullscr_cln(c, true);
+      cln_set_fullscr(c, true);
       xcb_flush(conn);
       return;
     }
     // restack clients, count tiled clients
-    if (!c->isfloat) {
-      stack_win(c->frame, Bottom);
+    if (!c->isfloating) {
+      win_stack(c->frame, Bottom);
       ++n;
     } else
-      stack_win(c->frame, Top);
+      win_stack(c->frame, Top);
   }
 
   // the layout may modify page parameters as they see fit
@@ -654,7 +655,7 @@ void arrange_mon(monitor_t *m)
 }
 
 
-client_t *create_cln()
+client_t *cln_create()
 {
   xassert(fm, "no focus monitor");
   client_t *c;
@@ -667,20 +668,20 @@ client_t *create_cln()
   c->tcap = 1;
   c->nt = 0;
   c->ft = 0;
-  c->isfloat = false;
+  c->isfloating = false;
   c->isfullscr = false;
   c->x = c->px = 0;
   c->y = c->py = 0;
   c->w = c->pw = VXWM_CLN_MIN_W;
   c->h = c->ph = VXWM_CLN_MIN_H;
 
-  frame_cln(c);
+  cln_add_frame(c);
   xcb_map_window(conn, c->frame);
   log("created client frame: %d", c->frame);
   return c;
 }
 
-void delete_cln(client_t *c)
+void cln_delete(client_t *c)
 {
   xassert(c->nt == 0, "deleting a client with tabs");
 
@@ -692,15 +693,15 @@ void delete_cln(client_t *c)
   xfree(c);
 }
 
-void border_cln(client_t *c, int width)
+void cln_set_border(client_t *c, int width)
 {
-  xassert(c && width >= 0, "bad call to border_cln");
+  xassert(c && width >= 0, "bad call to cln_set_border");
 
   masks = XCB_CONFIG_WINDOW_BORDER_WIDTH;
   xcb_configure_window(conn, c->frame, masks, &width);
 }
 
-void frame_cln(client_t *c)
+void cln_add_frame(client_t *c)
 {
   uint32_t bw = 3, bp = VXWM_CLN_NORMAL_CLR;
   int i, n;
@@ -716,7 +717,7 @@ void frame_cln(client_t *c)
           XCB_EVENT_MASK_EXPOSURE;
   xcb_change_window_attributes(conn, c->frame, XCB_CW_EVENT_MASK, &masks);
 
-  border_cln(c, VXWM_CLN_BORDER_W);
+  cln_set_border(c, VXWM_CLN_BORDER_W);
 
   masks = XCB_EVENT_MASK_BUTTON_PRESS |
           XCB_EVENT_MASK_BUTTON_RELEASE |
@@ -726,20 +727,20 @@ void frame_cln(client_t *c)
                     XCB_NONE, XCB_NONE, btnbinds[i].btn, btnbinds[i].mod);
 }
 
-void attach_cln(client_t *c)
+void cln_attach(client_t *c)
 {
   c->next = fm->cln;
   fm->cln = c;
 }
 
-void detach_cln(client_t *c)
+void cln_detach(client_t *c)
 {
   client_t **cc;
   for (cc = &fm->cln; *cc && *cc != c; cc = &(*cc)->next) ;
   *cc = c->next;
 }
 
-void focus_cln(client_t *c)
+void cln_set_focus(client_t *c)
 {
   uint32_t fclr = VXWM_CLN_FOCUS_CLR;
   uint32_t nclr = VXWM_CLN_NORMAL_CLR;
@@ -753,44 +754,44 @@ void focus_cln(client_t *c)
     pf = fc;
     fc = c;
     xcb_change_window_attributes(conn, pf->frame, XCB_CW_BORDER_PIXEL, &nclr);
-    draw_tabs(pf);
+    tab_draw(pf);
   }
 
   // assign new focus client or loose focus
   if ((fc = c)) {
-    raise_cln(fc); // TODO: raise_on_focus option
+    cln_raise(fc); // TODO: raise_on_focus option
     xcb_change_window_attributes(conn, fc->frame, XCB_CW_BORDER_PIXEL, &fclr);
-    focus_win(fc->tab[fc->ft]);
-    draw_tabs(fc);
+    win_focus(fc->tab[fc->ft]);
+    tab_draw(fc);
     log("new focus: %d", fc->frame);
   } else {
-    focus_win(root);
+    win_focus(root);
     log("loosing focus");
   }
 }
 
-void raise_cln(client_t *c)
+void cln_raise(client_t *c)
 {
-  xassert(c, "bad call to raise_cln");
-  stack_win(c->frame, Top);
-  draw_tabs(c);
+  xassert(c, "bad call to cln_raise");
+  win_stack(c->frame, Top);
+  tab_draw(c);
 }
 
-void fullscr_cln(client_t *c, bool fullscr)
+void cln_set_fullscr(client_t *c, bool fullscr)
 {
-  xassert(c, "bad call to fullscr_cln");
+  xassert(c, "bad call to cln_set_fullscr");
 
   if (fullscr) {
-    stack_win(c->frame, Top);
-    border_cln(c, 0);
-    move_resize_cln(c, 0, 0, scr->width_in_pixels, scr->height_in_pixels);
+    win_stack(c->frame, Top);
+    cln_set_border(c, 0);
+    cln_move_resize(c, 0, 0, scr->width_in_pixels, scr->height_in_pixels);
   } else {
-    border_cln(c, VXWM_CLN_BORDER_W);
-    move_resize_cln(c, c->px, c->py, c->pw, c->ph);
+    cln_set_border(c, VXWM_CLN_BORDER_W);
+    cln_move_resize(c, c->px, c->py, c->pw, c->ph);
   }
 }
 
-void attach_tab(client_t *c, xcb_window_t win)
+void tab_attach(client_t *c, xcb_window_t win)
 {
   if (c->nt == c->tcap) {
     c->tcap <<= 1;
@@ -800,9 +801,9 @@ void attach_tab(client_t *c, xcb_window_t win)
   xcb_reparent_window(conn, win, c->frame, 0, VXWM_TAB_HEIGHT);
 }
 
-void detach_tab(client_t *c, int i)
+void tab_detach(client_t *c, int i)
 {
-  xassert(c && i < c->nt, "bad call to detach_tab");
+  xassert(c && i < c->nt, "bad call to tab_detach");
   uint32_t lsb;
 
   if (c->sel & (1 << i))
@@ -818,9 +819,9 @@ void detach_tab(client_t *c, int i)
   c->ft = MAX(c->ft - 1, 0);
 }
 
-void draw_tabs(client_t *c)
+void tab_draw(client_t *c)
 {
-  xassert(c && c->nt > 0, "bad call to draw_tabs");
+  xassert(c && c->nt > 0, "bad call to tab_draw");
   int tw = c->w / c->nt, sw = VXWM_TAB_HEIGHT / 2;
   int i;
 
@@ -833,7 +834,7 @@ void draw_tabs(client_t *c)
   draw_copy(c->frame, 0, 0, c->w, VXWM_TAB_HEIGHT);
 }
 
-void kill_tab(xcb_window_t win)
+void tab_kill(xcb_window_t win)
 {
   if (has_proto(win, wm_atom[WmDeleteWindow]))
     send_msg(win, wm_atom[WmDeleteWindow]);
@@ -841,9 +842,9 @@ void kill_tab(xcb_window_t win)
     xcb_kill_client(conn, win);
 }
 
-void move_cln(client_t *c, int x, int y)
+void cln_move(client_t *c, int x, int y)
 {
-  xassert(c, "bad call to move_cln");
+  xassert(c, "bad call to cln_move");
 
   c->px = c->x;
   c->py = c->y;
@@ -853,9 +854,9 @@ void move_cln(client_t *c, int x, int y)
   xcb_configure_window(conn, c->frame, masks, vals);
 }
 
-void resize_cln(client_t *c, int w, int h)
+void cln_resize(client_t *c, int w, int h)
 {
-  xassert(c, "bad call to resize_cln");
+  xassert(c, "bad call to cln_resize");
 
   if (w < VXWM_CLN_MIN_W || h < VXWM_CLN_MIN_H)
     return;
@@ -867,13 +868,13 @@ void resize_cln(client_t *c, int w, int h)
   vals[1] = c->h = h;
   xcb_configure_window(conn, c->frame, masks, vals);
   xcb_configure_window(conn, c->tab[c->ft], masks, vals);
-  draw_tabs(c);
+  tab_draw(c);
 }
 
-void move_resize_cln(client_t *c, int x, int y, int w, int h)
+void cln_move_resize(client_t *c, int x, int y, int w, int h)
 {
-  move_cln(c, x, y);
-  resize_cln(c, w, h);
+  cln_move(c, x, y);
+  cln_resize(c, w, h);
 }
 
 client_t *next_inpage(client_t *c)
@@ -891,7 +892,7 @@ client_t *prev_inpage(client_t *c)
 
 client_t *next_tiled(client_t *c)
 {
-  for (; c && (!INPAGE(c) || c->isfloat); c = c->next) ;
+  for (; c && (!INPAGE(c) || c->isfloating); c = c->next) ;
   return c;
 }
 
@@ -954,9 +955,9 @@ void bn_kill_tab(const arg_t *arg)
   if (ns > 0) { // consume selection
     for (c = next_selected(fm->cln); c; c = next_selected(c->next))
       for (i = 0; i < c->nt; ++i) if (c->sel & (1 << i))
-        kill_tab(c->tab[i]);
+        tab_kill(c->tab[i]);
   } else
-    kill_tab(fc->tab[fc->ft]);
+    tab_kill(fc->tab[fc->ft]);
   xcb_flush(conn);
 }
 
@@ -995,7 +996,7 @@ void bn_swap_cln(const arg_t *arg)
 {
   client_t *p = NULL, *c = next_tiled(fm->cln);
 
-  if (!fc || fc->isfloat || !next_tiled(c->next))
+  if (!fc || fc->isfloating || !next_tiled(c->next))
     return;
 
   switch (arg->t) {
@@ -1032,7 +1033,7 @@ void bn_swap_cln(const arg_t *arg)
       return;
   }
   // reattach focus client
-  detach_cln(fc);
+  cln_detach(fc);
   if (p) {
     fc->next = p->next;
     p->next = fc;
@@ -1040,7 +1041,7 @@ void bn_swap_cln(const arg_t *arg)
     fc->next = fm->cln;
     fm->cln = fc;
   }
-  arrange_mon(fm);
+  mon_arrange(fm);
 }
 
 void bn_move_cln(const arg_t *arg)
@@ -1066,7 +1067,7 @@ void bn_toggle_select(const arg_t *arg)
 
   fc->sel ^= (1 << fc->ft);
   ns += (fc->sel & (1 << fc->ft)) ? +1 : -1;
-  draw_tabs(fc);
+  tab_draw(fc);
   xcb_flush(conn);
 }
 
@@ -1077,8 +1078,8 @@ void bn_toggle_float(const arg_t *arg)
   if (!fc)
     return;
 
-  fc->isfloat = !fc->isfloat;
-  arrange_mon(fm);
+  fc->isfloating = !fc->isfloating;
+  mon_arrange(fm);
 }
 
 void bn_toggle_fullscr(const arg_t *arg)
@@ -1089,11 +1090,11 @@ void bn_toggle_fullscr(const arg_t *arg)
     return;
 
   if (fc->isfullscr) {
-    fullscr_cln(fc, false);
+    cln_set_fullscr(fc, false);
     fc->isfullscr = false;
   } else
     fc->isfullscr = true;
-  arrange_mon(fm);
+  mon_arrange(fm);
 }
 
 void bn_merge_cln(const arg_t *arg)
@@ -1112,8 +1113,8 @@ void bn_merge_cln(const arg_t *arg)
       mc = fc;
       break;
     default:
-      mc = create_cln();
-      attach_cln(mc);
+      mc = cln_create();
+      cln_attach(mc);
       break;
   }
  
@@ -1122,23 +1123,23 @@ void bn_merge_cln(const arg_t *arg)
     while (c->sel) {
       for (i = 0; !(c->sel & (1 << i)); ++i) ;
       win = c->tab[i];
-      detach_tab(c, i);
-      attach_tab(mc, win);
+      tab_detach(c, i);
+      tab_attach(mc, win);
     }
     if (c->nt == 0) {
       d = c;
       c = next_selected(c->next);
-      detach_cln(d);  
-      delete_cln(d);
+      cln_detach(d);  
+      cln_delete(d);
     } else {
-      draw_tabs(c);
+      tab_draw(c);
       c = next_selected(c->next);
     }
   }
   xassert(ns == 0, "bad selection counting");
-  stack_win(mc->tab[mc->ft], Top);
-  focus_cln(mc);
-  arrange_mon(fm);
+  win_stack(mc->tab[mc->ft], Top);
+  cln_set_focus(mc);
+  mon_arrange(fm);
 }
 
 void bn_split_cln(const arg_t *arg)
@@ -1152,11 +1153,11 @@ void bn_split_cln(const arg_t *arg)
     return;
 
   if (ns == 0) { // split focus tab from focus client
-    sc = create_cln();
-    attach_cln(sc);
+    sc = cln_create();
+    cln_attach(sc);
     win = fc->tab[fc->ft];
-    detach_tab(fc, fc->ft);
-    attach_tab(sc, win);
+    tab_detach(fc, fc->ft);
+    tab_attach(sc, win);
   } else for (c = next_selected(fm->cln); c; c = next_selected(c->next))
     while (c->sel) { // consume selection
       if (c->nt == 1) {
@@ -1164,16 +1165,16 @@ void bn_split_cln(const arg_t *arg)
         c->sel = 0;
         break;
       }
-      sc = create_cln();
-      attach_cln(sc);
+      sc = cln_create();
+      cln_attach(sc);
       for (i = 0; !(c->sel & (1 << i)); ++i) ;
       win = c->tab[i];
-      detach_tab(c, i);
-      attach_tab(sc, win);
+      tab_detach(c, i);
+      tab_attach(sc, win);
     }
   xassert(ns == 0, "bad selection counting");
-  focus_cln(sc ? sc : fc);
-  arrange_mon(fm);
+  cln_set_focus(sc ? sc : fc);
+  mon_arrange(fm);
 }
 
 void bn_focus_cln(const arg_t *arg)
@@ -1205,7 +1206,7 @@ void bn_focus_cln(const arg_t *arg)
       for (c = fc; next_inpage(c->next); c = next_inpage(c->next)) ;
       break;
   }
-  focus_cln(c);
+  cln_set_focus(c);
   xcb_flush(conn);
 }
 
@@ -1243,9 +1244,9 @@ void bn_focus_tab(const arg_t *arg)
   xcb_configure_window(conn, win, masks, vals);
 
   // raise tab window and redraw client tabs
-  stack_win(win, Top);
-  focus_win(win);
-  draw_tabs(fc);
+  win_stack(win, Top);
+  win_focus(win);
+  tab_draw(fc);
 
   xcb_flush(conn);
   log("focusing tab %d (%d/%d)", win, fc->ft + 1, fc->nt);
@@ -1261,13 +1262,13 @@ void bn_focus_page(const arg_t *arg)
   // lose selection when switching pages
   for (c = next_inpage(fm->cln); c; c = next_inpage(c->next)) {
     c->sel = 0;
-    move_cln(c, scr->width_in_pixels, 0);
+    cln_move(c, scr->width_in_pixels, 0);
   }
   ns = 0;
 
   log("focus page %s", pages[arg->i].sym);
   fm->fp = arg->i;
-  arrange_mon(fm);
+  mon_arrange(fm);
 }
 
 void bn_set_param(const arg_t *arg)
@@ -1275,7 +1276,7 @@ void bn_set_param(const arg_t *arg)
   int *v = (int *)arg->v;
   
   pages[fm->fp].par[v[0]] += v[1];
-  arrange_mon(fm);
+  mon_arrange(fm);
 }
 
 void bn_set_layout(const arg_t *arg)
@@ -1283,7 +1284,7 @@ void bn_set_layout(const arg_t *arg)
   xassert(arg->i < (int)LENGTH(layouts), "bad call to bn_set_layout");
 
   pages[fm->fp].lt = &layouts[arg->i];
-  arrange_mon(fm);
+  mon_arrange(fm);
 }
 
 // column layout
@@ -1305,9 +1306,9 @@ void column(const monitor_t *m, int n, int *par)
 
   for (c = next_tiled(m->cln), i = 0; c; c = next_tiled(c->next), ++i)
     if (i < cols - 1)
-      move_resize_cln(c, i * colw, 0, colw - BORDER, scrh - BORDER);
+      cln_move_resize(c, i * colw, 0, colw - BORDER, scrh - BORDER);
     else
-      move_resize_cln(c, scrw - colw, h * (i - cols + 1), colw - BORDER, h - BORDER);
+      cln_move_resize(c, scrw - colw, h * (i - cols + 1), colw - BORDER, h - BORDER);
 }
 
 // stack layout
@@ -1333,9 +1334,9 @@ void stack(const monitor_t *m, int n, int *par)
 
   for (c = next_tiled(m->cln), i = 0; c; c = next_tiled(c->next), ++i)
     if (i < ln)
-      move_resize_cln(c, 0, scrh / ln * i, lw - BORDER, scrh / ln - BORDER);
+      cln_move_resize(c, 0, scrh / ln * i, lw - BORDER, scrh / ln - BORDER);
     else
-      move_resize_cln(c, lw, scrh / rn * (i - ln), rw - BORDER, scrh / rn - BORDER);
+      cln_move_resize(c, lw, scrh / rn * (i - ln), rw - BORDER, scrh / rn - BORDER);
 }
 
 int main(int argc, char *argv[])
