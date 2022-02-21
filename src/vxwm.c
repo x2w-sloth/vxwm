@@ -38,8 +38,8 @@ struct client {
   xcb_window_t frame;  // client frame
   xcb_window_t *tab;   // window tabs
   uint32_t tag;        // page tag bitmask
-  uint32_t sel;        // tab selection bitmask
-  uint8_t tcap;        // maximum tab capacity
+  uint64_t sel;        // tab selection bitmask
+  int tcap;            // maximum tab capacity
   int nt, ft;          // number of tabs, index of focus tab
   int x, y, w, h;      // client dimensions
   int px, py, pw, ph;  // previous client dimensions
@@ -660,7 +660,7 @@ client_t *cln_create()
   c = xmalloc(sizeof(client_t));
   c->next = NULL;
   c->tab = xmalloc(sizeof(xcb_window_t));
-  c->tag = 1 << fm->fp;
+  c->tag = LSB(fm->fp);
   c->sel = 0;
   c->tcap = 1;
   c->nt = 0;
@@ -798,11 +798,11 @@ void tab_detach(client_t *c, int i)
   xassert(c && i < c->nt, "bad call to tab_detach");
   uint32_t lsb;
 
-  if (c->sel & (1 << i))
+  if (c->sel & LSB(i))
     ns--;
   
   // preserve selection mask
-  lsb = (1 << i) - 1;
+  lsb = LSB(i) - 1;
   c->sel = ((c->sel >> 1) & ~lsb) + (c->sel & lsb);
 
   for (; i < c->nt - 1; i++)
@@ -821,7 +821,7 @@ void tab_draw(client_t *c)
   if (c == fc)
     draw_rect(tw * c->ft, 0, tw, VXWM_TAB_HEIGHT, VXWM_TAB_FOCUS_CLR);
   for (i = 0; i < c->nt; i++)
-    if (c->sel & (1 << i))
+    if (c->sel & LSB(i))
       draw_rect((i + 0.25) * tw, sw / 2, tw / 2, sw, VXWM_TAB_SELECT_CLR);
   draw_copy(c->frame, 0, 0, c->w, VXWM_TAB_HEIGHT);
 }
@@ -941,7 +941,7 @@ void bn_kill_tab(const arg_t *arg)
 
   if (ns > 0) { // consume selection
     for (c = next_selected(fm->cln); c; c = next_selected(c->next))
-      for (i = 0; i < c->nt; i++) if (c->sel & (1 << i))
+      for (i = 0; i < c->nt; i++) if (c->sel & LSB(i))
         tab_kill(c->tab[i]);
   } else
     tab_kill(fc->tab[fc->ft]);
@@ -1052,8 +1052,8 @@ void bn_toggle_select(const arg_t *arg)
   if (!fc)
     return;
 
-  fc->sel ^= (1 << fc->ft);
-  ns += (fc->sel & (1 << fc->ft)) ? +1 : -1;
+  fc->sel ^= LSB(fc->ft);
+  ns += (fc->sel & LSB(fc->ft)) ? +1 : -1;
   tab_draw(fc);
   xcb_flush(conn);
 }
@@ -1091,7 +1091,8 @@ void bn_merge_cln(const arg_t *arg)
   xcb_window_t win;
   int i;
 
-  if (!fc || ns == 0)
+  // maximum tab count is capped at 64
+  if (!fc || ns == 0 || fc->nt + ns > 64)
     return;
 
   // determine merge destination
@@ -1108,7 +1109,7 @@ void bn_merge_cln(const arg_t *arg)
   c = next_selected(fm->cln);
   while (c) {
     while (c->sel) {
-      for (i = 0; !(c->sel & (1 << i)); i++) ;
+      for (i = 0; !(c->sel & LSB(i)); i++) ;
       win = c->tab[i];
       tab_detach(c, i);
       tab_attach(mc, win);
@@ -1154,7 +1155,7 @@ void bn_split_cln(const arg_t *arg)
       }
       sc = cln_create();
       cln_attach(sc);
-      for (i = 0; !(c->sel & (1 << i)); i++) ;
+      for (i = 0; !(c->sel & LSB(i)); i++) ;
       win = c->tab[i];
       tab_detach(c, i);
       tab_attach(sc, win);

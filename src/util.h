@@ -9,6 +9,7 @@
 
 #define MIN(L, R)           ((L) < (R) ? (L) : (R))
 #define MAX(L, R)           ((L) > (R) ? (L) : (R))
+#define LSB(X)              (1ULL << (X))
 #define SWAP(L, R)          {(L) ^= (R); (R) ^= (L); (L) ^= (R);}
 #define SWAP_BITS(X, A, B)  {uint32_t XOR = (((X)>>(A)) ^ ((X)>>(B))) & 1; \
                                       (X) ^= (XOR<<(A)) | (XOR<<(B));}
