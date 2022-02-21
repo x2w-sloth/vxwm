@@ -12,6 +12,7 @@
 #include "global.h"
 #include "util.h"
 #include "draw.h"
+
 // a monitor corresponds to a physical display and contains pages
 struct monitor {
   monitor_t *next;     // monitor linked list
@@ -81,7 +82,6 @@ static void args(int, char **);
 static void setup(void);
 static void run(void);
 static void cleanup(void);
-static void atom_request(void);
 static void atom_setup(void);
 static xcb_keycode_t *keysym_to_keycodes(xcb_keysym_t);
 static xcb_keysym_t keycode_to_keysym(xcb_keycode_t);
@@ -152,8 +152,6 @@ static void column(const monitor_t *, int, int *);
 static void stack(const monitor_t *, int, int *);
 // globals
 static xcb_key_symbols_t *symbols;
-static xcb_intern_atom_cookie_t wm_cookies[WmAtomsLast];
-static xcb_intern_atom_cookie_t net_cookies[NetAtomsLast];
 static xcb_atom_t wm_atom[WmAtomsLast];
 static xcb_atom_t net_atom[NetAtomsLast];
 static handler_t handler[XCB_NO_OPERATION];
@@ -206,12 +204,12 @@ void setup(void)
   if (error)
     die("another window manager is running");
 
-  // setup monitors and initialize drawing context
+  // setup monitors, initialize drawing context and atoms
   fm = mon_create();
   draw_setup();
+  atom_setup();
 
-  // reqeust atoms, load symbols and grab keys on root window
-  atom_request();
+  // load symbols and grab keys on root window
   symbols = xcb_key_symbols_alloc(conn);
   if (!symbols)
     die("failed to allocate key symbol table");
@@ -270,35 +268,32 @@ void cleanup(void)
 }
 
 
-void atom_request(void)
-{
-  wm_cookies[WmProtocols]    = xcb_intern_atom(conn, false, ATOM_NAME("WM_PROTOCOLS"));
-  wm_cookies[WmTakeFocus]    = xcb_intern_atom(conn, false, ATOM_NAME("WM_TAKE_FOCUS"));
-  wm_cookies[WmDeleteWindow] = xcb_intern_atom(conn, false, ATOM_NAME("WM_DELETE_WINDOW"));
-  net_cookies[NetWmName]     = xcb_intern_atom(conn, false, ATOM_NAME("_NET_WM_NAME"));
-  net_cookies[NetWmWindowType] = xcb_intern_atom(conn, false, ATOM_NAME("_NET_WM_WINDOW_TYPE"));
-  net_cookies[NetWmWindowTypeDialog] = xcb_intern_atom(conn, false, ATOM_NAME("_NET_WM_WINDOW_TYPE_DIALOG"));
-}
-
+#define ATOM(NAME) xcb_intern_atom(conn, false, (uint16_t)strlen(NAME), NAME)
 void atom_setup(void)
 {
+  xcb_intern_atom_cookie_t wm_cookies[WmAtomsLast];
+  xcb_intern_atom_cookie_t net_cookies[NetAtomsLast];
   xcb_intern_atom_reply_t *reply;
   int i;
+
+  // request atoms
+  wm_cookies[WmProtocols]    = ATOM("WM_PROTOCOLS");
+  wm_cookies[WmTakeFocus]    = ATOM("WM_TAKE_FOCUS");
+  wm_cookies[WmDeleteWindow] = ATOM("WM_DELETE_WINDOW");
+  net_cookies[NetWmName]     = ATOM("_NET_WM_NAME");
+  net_cookies[NetWmWindowType] = ATOM("_NET_WM_WINDOW_TYPE");
+  net_cookies[NetWmWindowTypeDialog] = ATOM("_NET_WM_WINDOW_TYPE_DIALOG");
 
   for (i = 0; i < WmAtomsLast; i++)
     if ((reply = xcb_intern_atom_reply(conn, wm_cookies[i], NULL))) {
       wm_atom[i] = reply->atom;
       xfree(reply);
-    } else {
-      log("failed to retreive wm atom from server");
     }
 
   for (i = 0; i < NetAtomsLast; i++)
     if ((reply = xcb_intern_atom_reply(conn, net_cookies[i], NULL))) {
       net_atom[i] = reply->atom;
       xfree(reply);
-    } else {
-      log("failed to retreive net atom from server");
     }
 }
 

@@ -15,7 +15,6 @@
                                       (X) ^= (XOR<<(A)) | (XOR<<(B));}
 #define LENGTH(ARR)         (sizeof(ARR) / sizeof(*ARR))
 #define UNUSED(PTR)         (void)(PTR)
-#define ATOM_NAME(ATOM)     (uint16_t)strlen(ATOM), ATOM
 
 #ifdef VXWM_DEBUG
 
