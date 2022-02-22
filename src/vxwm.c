@@ -13,6 +13,14 @@
 #include "util.h"
 #include "draw.h"
 
+#define VXWM_ROOT_EVENT_MASK    (XCB_EVENT_MASK_SUBSTRUCTURE_NOTIFY |\
+                                 XCB_EVENT_MASK_SUBSTRUCTURE_REDIRECT)
+
+#define VXWM_FRAME_EVENT_MASK   (XCB_EVENT_MASK_SUBSTRUCTURE_REDIRECT |\
+                                 XCB_EVENT_MASK_EXPOSURE)
+
+#define VXWM_WIN_EVENT_MASK     (XCB_EVENT_MASK_STRUCTURE_NOTIFY)
+
 // a monitor corresponds to a physical display and contains pages
 struct monitor {
   monitor_t *next;     // monitor linked list
@@ -209,8 +217,8 @@ void setup(void)
 
   // configure root window, check if another wm is running
   root = scr->root;
-  masks = XCB_EVENT_MASK_SUBSTRUCTURE_NOTIFY | XCB_EVENT_MASK_SUBSTRUCTURE_REDIRECT;
-  cookie = xcb_change_window_attributes_checked(conn, root, XCB_CW_EVENT_MASK, &masks);
+  vals[0] = VXWM_ROOT_EVENT_MASK;
+  cookie = xcb_change_window_attributes_checked(conn, root, XCB_CW_EVENT_MASK, vals);
   error = xcb_request_check(conn, cookie);
   xcb_flush(conn);
   if (error)
@@ -692,6 +700,9 @@ void cln_manage(xcb_window_t win)
   tab_attach(c, win);
   cln_attach(c);
 
+  vals[0] = VXWM_WIN_EVENT_MASK;
+  xcb_change_window_attributes(conn, win, XCB_CW_EVENT_MASK, vals);
+
   win_type = get_atom_prop(c->tab[c->ft], net_atom[NetWmWindowType]);
   if (win_type == net_atom[NetWmWindowTypeDialog])
     c->isfloating = true;
@@ -738,10 +749,8 @@ void cln_add_frame(client_t *c)
                     XCB_WINDOW_CLASS_INPUT_OUTPUT,
                     scr->root_visual, XCB_CW_BORDER_PIXEL, &bp);
 
-  masks = XCB_EVENT_MASK_SUBSTRUCTURE_NOTIFY |
-          XCB_EVENT_MASK_SUBSTRUCTURE_REDIRECT |
-          XCB_EVENT_MASK_EXPOSURE;
-  xcb_change_window_attributes(conn, c->frame, XCB_CW_EVENT_MASK, &masks);
+  vals[0] = VXWM_FRAME_EVENT_MASK;
+  xcb_change_window_attributes(conn, c->frame, XCB_CW_EVENT_MASK, vals);
 
   cln_set_border(c, VXWM_CLN_BORDER_W);
 
