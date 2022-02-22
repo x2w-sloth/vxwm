@@ -18,6 +18,7 @@ struct monitor {
   monitor_t *next;     // monitor linked list
   client_t *cln;       // clients under this monitor
   int np, fp;          // number of pages, index of focus page
+  int lx, ly, lw, lh;  // layout space where tiled clients are arranged in
 };
 
 // a page displays a subset of clients under a layout policy
@@ -266,6 +267,7 @@ void cleanup(void)
   // TODO: kill remaining clients
 
   // free resources and disconnect
+  draw_cleanup();
   mon_delete(fm);
   if (symbols)
     xcb_key_symbols_free(symbols);
@@ -617,6 +619,10 @@ monitor_t *mon_create(void)
   m->cln = NULL;
   m->np = LENGTH(pages);
   m->fp = 0;
+  m->lx = 0;
+  m->ly = 0;
+  m->lw = scr->width_in_pixels - m->lx;
+  m->lh = scr->height_in_pixels - m->ly;
   return m;
 }
 
@@ -626,6 +632,8 @@ void mon_delete(monitor_t *m)
   xfree(m);
 }
 
+// TODO: arranging non-focus monitor will yield bugs since INPAGE references the focus monitor,
+//       doesn't matter fow now but remember to update this once we have multi-monitor support
 void mon_arrange(monitor_t *m)
 {
   layout_arg_t arg;
@@ -1314,22 +1322,20 @@ void bn_set_layout(const arg_t *arg)
 //   excess clients are piled in the right-most column
 void column(const layout_arg_t *arg)
 {
+  int i, h, n = arg->ntiled, cols, colw;
+  monitor_t *m = arg->mon;
   client_t *c;
-  int scrw = scr->width_in_pixels, scrh = scr->height_in_pixels;
-  int i, h, cols, colw, n = arg->ntiled;
 
-  if (arg->par[0] <= 0)
-    arg->par[0] = 1;
-
+  arg->par[0] = MAX(arg->par[0], 1);
   cols = MIN(arg->par[0], n);
-  colw = scrw / cols;
-  h = scrh / (n - cols + 1);
+  colw = m->lw / cols;
+  h = m->lh / (n-cols+1);
 
   for (c = next_tiled(arg->mon->cln), i = 0; c; c = next_tiled(c->next), i++)
     if (i < cols - 1)
-      cln_move_resize(c, i * colw, 0, colw - BORDER, scrh - BORDER);
+      cln_move_resize(c, m->lx + i * colw, m->ly, colw - BORDER, m->lh - BORDER);
     else
-      cln_move_resize(c, scrw - colw, h * (i - cols + 1), colw - BORDER, h - BORDER);
+      cln_move_resize(c, m->lx + m->lw - colw, m->ly + h * (i-cols+1), colw - BORDER, h - BORDER);
 }
 
 // stack layout
@@ -1338,26 +1344,24 @@ void column(const layout_arg_t *arg)
 //   excess clients are piled in right stack 
 void stack(const layout_arg_t *arg)
 {
-  client_t *c;
-  int scrw = scr->width_in_pixels, scrh = scr->height_in_pixels;
   int i, ln, lw, rn, rw, n = arg->ntiled;
+  monitor_t *m = arg->mon;
+  client_t *c;
 
-  if (arg->par[0] <= 0)
-    arg->par[0] = 1;
-
+  arg->par[0] = MAX(arg->par[0], 1);
   ln = MIN(arg->par[0], n);
   rn = n - ln;
   if (n <= ln) {
-    lw = scrw;
+    lw = m->lw;
     rw = 0;
   } else
-    lw = rw = scrw / 2;
+    lw = rw = m->lw / 2;
 
   for (c = next_tiled(arg->mon->cln), i = 0; c; c = next_tiled(c->next), i++)
     if (i < ln)
-      cln_move_resize(c, 0, scrh / ln * i, lw - BORDER, scrh / ln - BORDER);
+      cln_move_resize(c, m->lx, m->ly + m->lh / ln * i, lw - BORDER, m->lh / ln - BORDER);
     else
-      cln_move_resize(c, lw, scrh / rn * (i - ln), rw - BORDER, scrh / rn - BORDER);
+      cln_move_resize(c, m->lx + lw, m->ly + m->lh / rn * (i-ln), rw - BORDER, m->lh / rn - BORDER);
 }
 
 int main(int argc, char *argv[])
