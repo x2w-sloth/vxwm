@@ -116,7 +116,9 @@ static void mon_delete(monitor_t *);
 static void mon_arrange(monitor_t *);
 // clients and tabs
 static client_t *cln_create(void);
+static void cln_manage(xcb_window_t);
 static void cln_delete(client_t *);
+static void cln_unmanage(client_t *);
 static void cln_set_border(client_t *, int);
 static void cln_add_frame(client_t *);
 static void cln_attach(client_t *);
@@ -539,15 +541,9 @@ void on_destroy_notify(xcb_generic_event_t *ge)
 
   for (i = 0; c->tab[i] != e->window; i++) ;
   tab_detach(c, i);
-  if (c->nt == 0) {
-    if (fc == c) {
-      fc = NULL; // so we don't call tab_draw with 0 tabs, inside cln_set_focus
-      cln_set_focus(c->next ? c->next : prev_cln(c));
-    }
-    cln_detach(c);
-    cln_delete(c);
-    mon_arrange(fm);
-  } else
+  if (c->nt == 0)
+    cln_unmanage(c);
+  else
     bn_focus_tab(&arg);
 }
 
@@ -556,7 +552,6 @@ void on_map_request(xcb_generic_event_t *ge)
   xcb_map_request_event_t *e = (xcb_map_request_event_t *)ge;
   xcb_get_window_attributes_cookie_t cookie;
   xcb_get_window_attributes_reply_t *wa;
-  xcb_atom_t win_type;
   client_t *c = win_to_cln(e->window);
 
   cookie = xcb_get_window_attributes(conn, e->window);
@@ -568,15 +563,7 @@ void on_map_request(xcb_generic_event_t *ge)
   }
   xfree(wa);
   if (!c) {
-    c = cln_create();
-    tab_attach(c, e->window);
-    cln_attach(c);
-    win_type = get_atom_prop(c->tab[c->ft], net_atom[NetWmWindowType]);
-    if (win_type == net_atom[NetWmWindowTypeDialog])
-      c->isfloating = true;
-    mon_arrange(fm);
-    xcb_map_window(conn, e->window);
-    cln_set_focus(c);
+    cln_manage(e->window);
     xcb_flush(conn);
   }
 }
@@ -670,7 +657,6 @@ void mon_arrange(monitor_t *m)
   log("arranged page %s with %s", pages[m->fp].sym, pages[m->fp].lt->sym);
 }
 
-
 client_t *cln_create()
 {
   xassert(fm, "no focus monitor");
@@ -697,16 +683,42 @@ client_t *cln_create()
   return c;
 }
 
+void cln_manage(xcb_window_t win)
+{
+  client_t *c;
+  xcb_atom_t win_type;
+
+  c = cln_create();
+  tab_attach(c, win);
+  cln_attach(c);
+
+  win_type = get_atom_prop(c->tab[c->ft], net_atom[NetWmWindowType]);
+  if (win_type == net_atom[NetWmWindowTypeDialog])
+    c->isfloating = true;
+
+  mon_arrange(fm);
+  xcb_map_window(conn, win);
+  cln_set_focus(c);
+}
+
 void cln_delete(client_t *c)
 {
-  xassert(c->nt == 0, "deleting a client with tabs");
-
   xcb_unmap_window(conn, c->frame);
   xcb_destroy_window(conn, c->frame);
   xcb_flush(conn);
   log("destroy frame: %d", c->frame);
   xfree(c->tab);
   xfree(c);
+}
+
+void cln_unmanage(client_t *c)
+{
+  xassert(c->nt == 0, "should not unmanage client with existing tabs");
+
+  cln_set_focus(NULL);
+  cln_detach(c);
+  cln_delete(c);
+  mon_arrange(fm);
 }
 
 void cln_set_border(client_t *c, int width)
@@ -764,7 +776,7 @@ void cln_set_focus(client_t *c)
     return;
 
   // update old focus client
-  if (fc) {
+  if (fc && fc->nt > 0) {
     pf = fc;
     fc = c;
     xcb_change_window_attributes(conn, pf->frame, XCB_CW_BORDER_PIXEL, &nclr);
