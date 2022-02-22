@@ -24,12 +24,10 @@
 }
 
 void xassert(bool, const char *);
-void log_event(xcb_generic_event_t *);
 
 #else
 
 # define log(...)
-# define log_event(...)
 # define xassert(...)
 
 #endif // VXWM_DEBUG

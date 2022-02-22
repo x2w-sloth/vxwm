@@ -255,10 +255,8 @@ void run(void)
   xcb_flush(conn);
   while (running && (ge = xcb_wait_for_event(conn))) {
     type = XCB_EVENT_RESPONSE_TYPE(ge);
-    if (handler[type]) {
-      log_event(ge);
+    if (handler[type])
       handler[type](ge);
-    }
     xfree(ge);
   }
 }
