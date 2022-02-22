@@ -1,7 +1,8 @@
-#define ALT   XCB_MOD_MASK_1
-#define MOD   XCB_MOD_MASK_4
-#define SHIFT XCB_MOD_MASK_SHIFT
-#define CTRL  XCB_MOD_MASK_CONTROL
+#define ALT      XCB_MOD_MASK_1
+#define MOD      XCB_MOD_MASK_4
+#define SHIFT    XCB_MOD_MASK_SHIFT
+#define CTRL     XCB_MOD_MASK_CONTROL
+#define PAGE(P)  (1 << (P))
 
 static layout_t layouts[] = {
   { "COL", column },
@@ -45,6 +46,8 @@ static keybind_t keybinds[] = {
   { MOD|ALT,     XK_k,       bn_set_param,      { .v = incp1 } },
   { MOD|ALT,     XK_l,       bn_set_param,      { .v = incp0 } },
   { MOD|ALT,     XK_h,       bn_set_param,      { .v = decp0 } },
+  { MOD|SHIFT,   XK_1,       bn_set_tag,        { .u32 = PAGE(0) } },
+  { MOD|SHIFT,   XK_2,       bn_set_tag,        { .u32 = PAGE(1) } },
   { MOD,         XK_1,       bn_focus_page,     { .i = 0 } },
   { MOD,         XK_2,       bn_focus_page,     { .i = 1 } },
 };

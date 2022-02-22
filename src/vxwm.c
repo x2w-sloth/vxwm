@@ -119,6 +119,7 @@ static void cln_set_fullscr(client_t *, bool);
 static void cln_move(client_t *, int, int);
 static void cln_resize(client_t *, int, int);
 static void cln_move_resize(client_t *, int, int, int, int);
+static void cln_show_hide(monitor_t *);
 static void tab_attach(client_t *, xcb_window_t);
 static void tab_detach(client_t *, int);
 static void tab_draw(client_t *);
@@ -145,6 +146,7 @@ static void bn_split_cln(const arg_t *);
 static void bn_focus_cln(const arg_t *);
 static void bn_focus_tab(const arg_t *);
 static void bn_focus_page(const arg_t *);
+static void bn_set_tag(const arg_t *);
 static void bn_set_param(const arg_t *);
 static void bn_set_layout(const arg_t *);
 // layouts
@@ -213,7 +215,6 @@ void setup(void)
   symbols = xcb_key_symbols_alloc(conn);
   if (!symbols)
     die("failed to allocate key symbol table");
-  atom_setup();
   grab_keys();
   xcb_flush(conn);
 
@@ -296,6 +297,7 @@ void atom_setup(void)
       xfree(reply);
     }
 }
+#undef ATOM
 
 xcb_keycode_t *keysym_to_keycodes(xcb_keysym_t keysym)
 {
@@ -625,9 +627,14 @@ void mon_arrange(monitor_t *m)
   int n = 0;
 
   for (c = next_inpage(m->cln); c; c = next_inpage(c->next)) {
-    // halts at the first client in page that wishes to be fullscreen
+    // if no client has focus, focus the first one in page
+    if (!fc)
+      cln_set_focus(c);
+    // due to the tagging mechanism, there can be multiple clients in the same page
+    // that wishes fullscreen, only the first one is granted fullscreen and focus
     if (c->isfullscr) {
       cln_set_fullscr(c, true);
+      cln_set_focus(c);
       xcb_flush(conn);
       return;
     }
@@ -859,6 +866,17 @@ void cln_move_resize(client_t *c, int x, int y, int w, int h)
   cln_resize(c, w, h);
 }
 
+void cln_show_hide(monitor_t *m)
+{
+  client_t *c;
+
+  for (c = m->cln; c; c = c->next)
+    if (INPAGE(c))
+      cln_move_resize(c, c->x, c->y, c->w, c->h);
+    else
+      cln_move(c, scr->width_in_pixels, 0);
+}
+
 client_t *next_inpage(client_t *c)
 {
   for (; c && !INPAGE(c); c = c->next) ;
@@ -867,8 +885,8 @@ client_t *next_inpage(client_t *c)
 
 client_t *prev_inpage(client_t *c)
 {
-  client_t *p;
-  for (p = next_inpage(fm->cln); p && (!INPAGE(c) || p->next != c); p = p->next) ;
+  client_t *p = next_inpage(fm->cln), *n;
+  for (; p && (n = next_inpage(p->next)) != c; p = n) ;
   return p;
 }
 
@@ -1243,14 +1261,26 @@ void bn_focus_page(const arg_t *arg)
     return;
   
   // lose selection when switching pages
-  for (c = next_inpage(fm->cln); c; c = next_inpage(c->next)) {
+  for (c = next_inpage(fm->cln); c; c = next_inpage(c->next))
     c->sel = 0;
-    cln_move(c, scr->width_in_pixels, 0);
-  }
   ns = 0;
 
   log("focus page %s", pages[arg->i].sym);
   fm->fp = arg->i;
+  cln_set_focus(NULL);
+  cln_show_hide(fm);
+  mon_arrange(fm);
+}
+
+void bn_set_tag(const arg_t *arg)
+{
+  uint32_t page_tag = arg->u32;
+
+  if (!fc || page_tag == 0)
+    return;
+  fc->tag = page_tag;
+  cln_set_focus(NULL);
+  cln_show_hide(fm);
   mon_arrange(fm);
 }
 
