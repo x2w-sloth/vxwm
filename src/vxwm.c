@@ -146,8 +146,8 @@ static client_t *next_inpage(client_t *);
 static client_t *prev_inpage(client_t *);
 static client_t *next_tiled(client_t *);
 static client_t *next_selected(client_t *);
-static client_t *prev_cln(client_t *);
-static client_t *win_to_cln(xcb_window_t);
+static client_t *tab_to_cln(xcb_window_t);
+static client_t *frame_to_cln(xcb_window_t);
 // bindings
 static void bn_quit(const arg_t *);
 static void bn_spawn(const arg_t *);
@@ -497,7 +497,7 @@ void on_button_press(xcb_generic_event_t *ge)
   xcb_button_press_event_t *e = (xcb_button_press_event_t *)ge;
   int i, n;
 
-  cln_set_focus(win_to_cln(e->event));
+  cln_set_focus(frame_to_cln(e->event));
   for (i = 0, n = LENGTH(btnbinds); i < n; i++)
     if (e->detail == btnbinds[i].btn && e->state == btnbinds[i].mod && btnbinds[i].fn) {
       ptr_first_motion = true;
@@ -531,7 +531,7 @@ void on_motion_notify(xcb_generic_event_t *ge)
 void on_expose(xcb_generic_event_t *ge)
 {
   xcb_expose_event_t *e = (xcb_expose_event_t *)ge;
-  client_t *c = win_to_cln(e->window);
+  client_t *c = frame_to_cln(e->window);
 
   if (c)
     tab_draw(c);
@@ -540,7 +540,7 @@ void on_expose(xcb_generic_event_t *ge)
 void on_destroy_notify(xcb_generic_event_t *ge)
 {
   xcb_destroy_notify_event_t *e = (xcb_destroy_notify_event_t *)ge;
-  client_t *c = win_to_cln(e->window);
+  client_t *c = tab_to_cln(e->window);
   arg_t arg = { .t = This };
   int i;
 
@@ -560,7 +560,7 @@ void on_map_request(xcb_generic_event_t *ge)
   xcb_map_request_event_t *e = (xcb_map_request_event_t *)ge;
   xcb_get_window_attributes_cookie_t cookie;
   xcb_get_window_attributes_reply_t *wa;
-  client_t *c = win_to_cln(e->window);
+  client_t *c = tab_to_cln(e->window);
 
   cookie = xcb_get_window_attributes(conn, e->window);
   wa = xcb_get_window_attributes_reply(conn, cookie, NULL);
@@ -582,7 +582,7 @@ void on_configure_request(xcb_generic_event_t *ge)
   client_t *c;
   int x, y, w, h;
 
-  if ((c = win_to_cln(e->window)) && c->isfloating) {
+  if ((c = tab_to_cln(e->window)) && c->isfloating) {
     xassert(e->window == c->tab[c->ft], "configured window is not focus tab");
     x = c->x;
     y = c->y;
@@ -940,25 +940,25 @@ client_t *next_selected(client_t *c)
   return c;
 }
 
-client_t *prev_cln(client_t *c)
-{
-  client_t *p;
-  for (p = fm->cln; p && p->next != c; p = p->next) ;
-  return p;
-}
-
-client_t *win_to_cln(xcb_window_t win)
+client_t *tab_to_cln(xcb_window_t win)
 {
   client_t *c;
   int i;
 
-  for (c = fm->cln; c; c = c->next) {
-    if (c->frame == win)
-      return c;
+  for (c = fm->cln; c; c = c->next)
     for (i = 0; i < c->nt; i++)
       if (c->tab[i] == win)
         return c;
-  }
+  return NULL;
+}
+
+client_t *frame_to_cln(xcb_window_t frame)
+{
+  client_t *c;
+
+  for (c = fm->cln; c; c = c->next)
+    if (c->frame == frame)
+      return c;
   return NULL;
 }
 
