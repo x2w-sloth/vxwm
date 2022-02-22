@@ -17,7 +17,8 @@
                                  XCB_EVENT_MASK_SUBSTRUCTURE_REDIRECT)
 
 #define VXWM_FRAME_EVENT_MASK   (XCB_EVENT_MASK_SUBSTRUCTURE_REDIRECT |\
-                                 XCB_EVENT_MASK_EXPOSURE)
+                                 XCB_EVENT_MASK_EXPOSURE |\
+                                 XCB_EVENT_MASK_ENTER_WINDOW)
 
 #define VXWM_WIN_EVENT_MASK     (XCB_EVENT_MASK_STRUCTURE_NOTIFY)
 
@@ -114,6 +115,7 @@ static void grant_configure_request(xcb_configure_request_event_t *);
 static void on_key_press(xcb_generic_event_t *);
 static void on_button_press(xcb_generic_event_t *);
 static void on_motion_notify(xcb_generic_event_t *);
+static void on_enter_notify(xcb_generic_event_t *);
 static void on_expose(xcb_generic_event_t *);
 static void on_destroy_notify(xcb_generic_event_t *);
 static void on_map_request(xcb_generic_event_t *);
@@ -240,7 +242,7 @@ void setup(void)
   handler[XCB_KEY_PRESS]       = on_key_press;
   handler[XCB_BUTTON_PRESS]    = on_button_press;
   handler[XCB_MOTION_NOTIFY]   = on_motion_notify;
-//handler[XCB_ENTER_NOTIFY]    = on_enter_notify; // XCB_EVENT_MASK_ENTER_WINDOW
+  handler[XCB_ENTER_NOTIFY]    = on_enter_notify;
 //handler[XCB_FOCUS_IN]        = on_focus_in;     // XCB_EVENT_MASK_FOCUS_CHANGE
   handler[XCB_EXPOSE]          = on_expose;
   handler[XCB_DESTROY_NOTIFY]  = on_destroy_notify;
@@ -528,6 +530,18 @@ void on_motion_notify(xcb_generic_event_t *ge)
   xcb_flush(conn);
 }
 
+void on_enter_notify(xcb_generic_event_t *ge)
+{
+  xcb_enter_notify_event_t *e = (xcb_enter_notify_event_t *)ge;
+  client_t *c;
+  log("on_enter_notify %d, mode %d", e->event, e->mode);
+
+  if (e->mode != XCB_NOTIFY_MODE_NORMAL || e->detail == XCB_NOTIFY_DETAIL_INFERIOR)
+    return;
+  if ((c = frame_to_cln(e->event)))
+    cln_set_focus(c);
+}
+
 void on_expose(xcb_generic_event_t *ge)
 {
   xcb_expose_event_t *e = (xcb_expose_event_t *)ge;
@@ -777,6 +791,8 @@ void cln_detach(client_t *c)
 
 void cln_set_focus(client_t *c)
 {
+  xcb_generic_event_t *ge;
+  uint8_t type;
   uint32_t fclr = VXWM_CLN_FOCUS_CLR;
   uint32_t nclr = VXWM_CLN_NORMAL_CLR;
   client_t *pf = NULL;
@@ -802,6 +818,14 @@ void cln_set_focus(client_t *c)
   } else {
     win_focus(root);
     log("loosing focus");
+  }
+
+  // ignore remaining enter notify events in local event queue
+  while ((ge = xcb_poll_for_queued_event(conn))) {
+    type = XCB_EVENT_RESPONSE_TYPE(ge);
+    if (type != XCB_ENTER_NOTIFY && handler[type])
+      handler[type](ge);
+    xfree(ge);
   }
 }
 
