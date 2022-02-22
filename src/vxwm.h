@@ -33,6 +33,7 @@ typedef union { int i; uint32_t u32; target_t t; const void *v; } arg_t;
 typedef struct monitor monitor_t;
 typedef struct page page_t;
 typedef struct layout layout_t;
+typedef struct layout_arg layout_arg_t;
 typedef struct client client_t;
 typedef struct keybind keybind_t;
 typedef struct btnbind btnbind_t;

@@ -30,7 +30,14 @@ struct page {
 // a layout arranges tiled cilents in a page
 struct layout {
   const char *sym;     // layout identifer string
-  void (*fn)(const monitor_t *, int, int *); // arrangement function
+  void (*fn)(const layout_arg_t *); // arrangement function
+};
+
+// context for layout arrangement function
+struct layout_arg {
+  monitor_t *mon;      // the monitor we are arranging
+  int *par;            // parameters from the focus page
+  int ntiled;          // number of tiled clients in focus page
 };
 
 // a client is one or more tabbed windows living under a monitor
@@ -150,8 +157,8 @@ static void bn_set_tag(const arg_t *);
 static void bn_set_param(const arg_t *);
 static void bn_set_layout(const arg_t *);
 // layouts
-static void column(const monitor_t *, int, int *);
-static void stack(const monitor_t *, int, int *);
+static void column(const layout_arg_t *);
+static void stack(const layout_arg_t *);
 // globals
 static xcb_key_symbols_t *symbols;
 static xcb_atom_t wm_atom[WmAtomsLast];
@@ -623,9 +630,12 @@ void mon_delete(monitor_t *m)
 
 void mon_arrange(monitor_t *m)
 {
+  layout_arg_t arg;
   client_t *c;
-  int n = 0;
 
+  arg.mon = m;
+  arg.par = pages[m->fp].par;
+  arg.ntiled = 0;
   for (c = next_inpage(m->cln); c; c = next_inpage(c->next)) {
     // if no client has focus, focus the first one in page
     if (!fc)
@@ -638,17 +648,18 @@ void mon_arrange(monitor_t *m)
       xcb_flush(conn);
       return;
     }
-    // restack clients, count tiled clients
-    if (!c->isfloating) {
-      win_stack(c->frame, Bottom);
-      n++;
-    } else
+    // restack and count tiled clients in focus page
+    if (c->isfloating)
       win_stack(c->frame, Top);
+    else {
+      win_stack(c->frame, Bottom);
+      arg.ntiled++;
+    }
   }
 
   // the layout may modify page parameters as they see fit
-  if (n != 0)
-    pages[m->fp].lt->fn(m, n, pages[m->fp].par);
+  if (arg.ntiled > 0)
+    pages[m->fp].lt->fn(&arg);
   xcb_flush(conn);
   log("arranged page %s with %s", pages[m->fp].sym, pages[m->fp].lt->sym);
 }
@@ -1303,20 +1314,20 @@ void bn_set_layout(const arg_t *arg)
 //   arrange clients in columns
 //   parameter 0: number of columns
 //   excess clients are piled in the right-most column
-void column(const monitor_t *m, int n, int *par)
+void column(const layout_arg_t *arg)
 {
   client_t *c;
   int scrw = scr->width_in_pixels, scrh = scr->height_in_pixels;
-  int i, h, cols, colw;
+  int i, h, cols, colw, n = arg->ntiled;
 
-  if (par[0] <= 0)
-    par[0] = 1;
+  if (arg->par[0] <= 0)
+    arg->par[0] = 1;
 
-  cols = MIN(par[0], n);
+  cols = MIN(arg->par[0], n);
   colw = scrw / cols;
   h = scrh / (n - cols + 1);
 
-  for (c = next_tiled(m->cln), i = 0; c; c = next_tiled(c->next), i++)
+  for (c = next_tiled(arg->mon->cln), i = 0; c; c = next_tiled(c->next), i++)
     if (i < cols - 1)
       cln_move_resize(c, i * colw, 0, colw - BORDER, scrh - BORDER);
     else
@@ -1327,16 +1338,16 @@ void column(const monitor_t *m, int n, int *par)
 //   arrange clients in two stacks
 //   parameter 0: number of clients in left stack
 //   excess clients are piled in right stack 
-void stack(const monitor_t *m, int n, int *par)
+void stack(const layout_arg_t *arg)
 {
   client_t *c;
   int scrw = scr->width_in_pixels, scrh = scr->height_in_pixels;
-  int i, ln, lw, rn, rw;
+  int i, ln, lw, rn, rw, n = arg->ntiled;
 
-  if (par[0] <= 0)
-    par[0] = 1;
+  if (arg->par[0] <= 0)
+    arg->par[0] = 1;
 
-  ln = MIN(par[0], n);
+  ln = MIN(arg->par[0], n);
   rn = n - ln;
   if (n <= ln) {
     lw = scrw;
@@ -1344,7 +1355,7 @@ void stack(const monitor_t *m, int n, int *par)
   } else
     lw = rw = scrw / 2;
 
-  for (c = next_tiled(m->cln), i = 0; c; c = next_tiled(c->next), i++)
+  for (c = next_tiled(arg->mon->cln), i = 0; c; c = next_tiled(c->next), i++)
     if (i < ln)
       cln_move_resize(c, 0, scrh / ln * i, lw - BORDER, scrh / ln - BORDER);
     else
