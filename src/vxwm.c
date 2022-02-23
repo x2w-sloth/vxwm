@@ -118,6 +118,7 @@ static void on_motion_notify(xcb_generic_event_t *);
 static void on_enter_notify(xcb_generic_event_t *);
 static void on_expose(xcb_generic_event_t *);
 static void on_destroy_notify(xcb_generic_event_t *);
+static void on_unmap_notify(xcb_generic_event_t *);
 static void on_map_request(xcb_generic_event_t *);
 static void on_configure_request(xcb_generic_event_t *);
 // monitors and pages
@@ -141,7 +142,7 @@ static void cln_resize(client_t *, int, int);
 static void cln_move_resize(client_t *, int, int, int, int);
 static void cln_show_hide(monitor_t *);
 static void tab_attach(client_t *, xcb_window_t);
-static void tab_detach(client_t *, int);
+static void tab_detach(client_t *, xcb_window_t);
 static void tab_draw(client_t *);
 static void tab_kill(xcb_window_t);
 static client_t *next_inpage(client_t *);
@@ -246,7 +247,7 @@ void setup(void)
 //handler[XCB_FOCUS_IN]        = on_focus_in;     // XCB_EVENT_MASK_FOCUS_CHANGE
   handler[XCB_EXPOSE]          = on_expose;
   handler[XCB_DESTROY_NOTIFY]  = on_destroy_notify;
-//handler[XCB_UNMAP_NOTIFY]    = on_unmap_notify;
+  handler[XCB_UNMAP_NOTIFY]    = on_unmap_notify;
   handler[XCB_MAP_REQUEST]     = on_map_request;
   handler[XCB_CONFIGURE_REQUEST] = on_configure_request;
 //handler[XCB_PROPERTY_NOTIFY] = on_property_notify;
@@ -556,17 +557,30 @@ void on_destroy_notify(xcb_generic_event_t *ge)
   xcb_destroy_notify_event_t *e = (xcb_destroy_notify_event_t *)ge;
   client_t *c = tab_to_cln(e->window);
   arg_t arg = { .t = This };
-  int i;
 
   if (!c)
     return;
 
-  for (i = 0; c->tab[i] != e->window; i++) ;
-  tab_detach(c, i);
+  tab_detach(c, e->window);
   if (c->nt == 0)
     cln_unmanage(c);
   else
     bn_focus_tab(&arg);
+}
+
+void on_unmap_notify(xcb_generic_event_t *ge)
+{
+  xcb_unmap_notify_event_t *e = (xcb_unmap_notify_event_t *)ge;
+  client_t *c;
+
+  if ((c = tab_to_cln(e->window))) {
+    tab_detach(c, e->window);
+    if (c->nt == 0)
+      cln_unmanage(c);
+    else
+      tab_draw(c);
+  }
+  xcb_flush(conn);
 }
 
 void on_map_request(xcb_generic_event_t *ge)
@@ -714,9 +728,6 @@ void cln_manage(xcb_window_t win)
   tab_attach(c, win);
   cln_attach(c);
 
-  vals[0] = VXWM_WIN_EVENT_MASK;
-  xcb_change_window_attributes(conn, win, XCB_CW_EVENT_MASK, vals);
-
   win_type = get_atom_prop(c->tab[c->ft], net_atom[NetWmWindowType]);
   if (win_type == net_atom[NetWmWindowTypeDialog])
     c->isfloating = true;
@@ -854,20 +865,33 @@ void tab_attach(client_t *c, xcb_window_t win)
     c->tab = xrealloc(c->tab, sizeof(xcb_window_t) * c->tcap);
   }
   c->tab[c->nt++] = win;
+
+  // If the window is already mapped and has the structure notify event mask,
+  // then reparenting generates an unmap notify on the reparented window.
+  // We avoid that by first configuring the window to have no event masks.
+  vals[0] = XCB_EVENT_MASK_NO_EVENT;
+  xcb_change_window_attributes(conn, win, XCB_CW_EVENT_MASK, vals);
   xcb_reparent_window(conn, win, c->frame, 0, VXWM_TAB_HEIGHT);
+  vals[0] = VXWM_WIN_EVENT_MASK;
+  xcb_change_window_attributes(conn, win, XCB_CW_EVENT_MASK, vals);
 }
 
-void tab_detach(client_t *c, int i)
+void tab_detach(client_t *c, xcb_window_t win)
 {
-  xassert(c && i < c->nt, "bad call to tab_detach");
-  uint32_t lsb;
+  uint32_t lsb_mask;
+  int i;
 
+  for (i = 0; i < c->nt && c->tab[i] != win; i++) ;
+  if (i >= c->nt) {
+    log("window not found in tab_detach");
+    return;
+  }
+
+  // preserve selection mask
   if (c->sel & LSB(i))
     ns--;
-  
-  // preserve selection mask
-  lsb = LSB(i) - 1;
-  c->sel = ((c->sel >> 1) & ~lsb) + (c->sel & lsb);
+  lsb_mask = LSB(i) - 1;
+  c->sel = ((c->sel >> 1) & ~lsb_mask) + (c->sel & lsb_mask);
 
   for (; i < c->nt - 1; i++)
     c->tab[i] = c->tab[i + 1];
@@ -877,10 +901,12 @@ void tab_detach(client_t *c, int i)
 
 void tab_draw(client_t *c)
 {
-  xassert(c && c->nt > 0, "bad call to tab_draw");
-  int tw = c->w / c->nt, sw = VXWM_TAB_HEIGHT / 2;
-  int i;
+  int tw, sw, i;
 
+  if (!c || c->nt == 0)
+    return;
+  tw = c->w / c->nt;
+  sw = VXWM_TAB_HEIGHT / 2;
   draw_rect(0, 0, c->w, VXWM_TAB_HEIGHT, VXWM_TAB_NORMAL_CLR);
   if (c == fc)
     draw_rect(tw * c->ft, 0, tw, VXWM_TAB_HEIGHT, VXWM_TAB_FOCUS_CLR);
@@ -1186,7 +1212,7 @@ void bn_merge_cln(const arg_t *arg)
     while (c->sel) {
       for (i = 0; !(c->sel & LSB(i)); i++) ;
       win = c->tab[i];
-      tab_detach(c, i);
+      tab_detach(c, win);
       tab_attach(mc, win);
     }
     if (c->nt == 0) {
@@ -1219,7 +1245,7 @@ void bn_split_cln(const arg_t *arg)
     sc = cln_create();
     cln_attach(sc);
     win = fc->tab[fc->ft];
-    tab_detach(fc, fc->ft);
+    tab_detach(fc, win);
     tab_attach(sc, win);
   } else for (c = next_selected(fm->cln); c; c = next_selected(c->next))
     while (c->sel) { // consume selection
@@ -1232,7 +1258,7 @@ void bn_split_cln(const arg_t *arg)
       cln_attach(sc);
       for (i = 0; !(c->sel & LSB(i)); i++) ;
       win = c->tab[i];
-      tab_detach(c, i);
+      tab_detach(c, win);
       tab_attach(sc, win);
     }
   xassert(ns == 0, "bad selection counting");
