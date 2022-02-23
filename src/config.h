@@ -48,6 +48,8 @@ static keybind_t keybinds[] = {
   { MOD|ALT,     XK_h,       bn_set_param,      { .v = decp0 } },
   { MOD|SHIFT,   XK_1,       bn_set_tag,        { .u32 = PAGE(0) } },
   { MOD|SHIFT,   XK_2,       bn_set_tag,        { .u32 = PAGE(1) } },
+  { MOD|CTRL,    XK_1,       bn_toggle_tag,     { .u32 = PAGE(0) } },
+  { MOD|CTRL,    XK_2,       bn_toggle_tag,     { .u32 = PAGE(1) } },
   { MOD,         XK_1,       bn_focus_page,     { .i = 0 } },
   { MOD,         XK_2,       bn_focus_page,     { .i = 1 } },
 };

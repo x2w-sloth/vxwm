@@ -167,6 +167,7 @@ static void bn_split_cln(const arg_t *);
 static void bn_focus_cln(const arg_t *);
 static void bn_focus_tab(const arg_t *);
 static void bn_focus_page(const arg_t *);
+static void bn_toggle_tag(const arg_t *);
 static void bn_set_tag(const arg_t *);
 static void bn_set_param(const arg_t *);
 static void bn_set_layout(const arg_t *);
@@ -1360,6 +1361,20 @@ void bn_focus_page(const arg_t *arg)
   mon_arrange(fm);
 }
 
+void bn_toggle_tag(const arg_t *arg)
+{
+  uint32_t page_tag = arg->u32;
+
+  if (!fc || (page_tag ^= fc->tag) == 0)
+    return;
+  fc->tag = page_tag; 
+  if (!INPAGE(fc)) {
+    cln_show_hide(fm);
+    cln_set_focus(NULL);
+    mon_arrange(fm);
+  }
+}
+
 void bn_set_tag(const arg_t *arg)
 {
   uint32_t page_tag = arg->u32;
@@ -1367,9 +1382,11 @@ void bn_set_tag(const arg_t *arg)
   if (!fc || page_tag == 0)
     return;
   fc->tag = page_tag;
-  cln_set_focus(NULL);
-  cln_show_hide(fm);
-  mon_arrange(fm);
+  if (!INPAGE(fc)) {
+    cln_set_focus(NULL);
+    cln_show_hide(fm);
+    mon_arrange(fm);
+  }
 }
 
 void bn_set_param(const arg_t *arg)
