@@ -244,7 +244,7 @@ void setup(void)
   handler[XCB_KEY_PRESS]       = on_key_press;
   handler[XCB_BUTTON_PRESS]    = on_button_press;
   handler[XCB_MOTION_NOTIFY]   = on_motion_notify;
-  handler[XCB_ENTER_NOTIFY]    = on_enter_notify;
+//handler[XCB_ENTER_NOTIFY]    = on_enter_notify;
 //handler[XCB_FOCUS_IN]        = on_focus_in;     // XCB_EVENT_MASK_FOCUS_CHANGE
   handler[XCB_EXPOSE]          = on_expose;
   handler[XCB_DESTROY_NOTIFY]  = on_destroy_notify;
@@ -542,6 +542,7 @@ void on_enter_notify(xcb_generic_event_t *ge)
     return;
   if ((c = frame_to_cln(e->event)))
     cln_set_focus(c);
+  xcb_flush(conn);
 }
 
 void on_expose(xcb_generic_event_t *ge)
@@ -751,8 +752,12 @@ void cln_delete(client_t *c)
 void cln_unmanage(client_t *c)
 {
   xassert(c->nt == 0, "should not unmanage client with existing tabs");
+  client_t *fb;
 
-  cln_set_focus(NULL);
+  // determine focus fallback
+  if (!(fb = next_inpage(c->next)))
+    fb = prev_inpage(c);
+  cln_set_focus(fb);
   cln_detach(c);
   cln_delete(c);
   mon_arrange(fm);
