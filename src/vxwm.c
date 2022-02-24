@@ -141,6 +141,7 @@ static void cln_move(client_t *, int, int);
 static void cln_resize(client_t *, int, int);
 static void cln_move_resize(client_t *, int, int, int, int);
 static void cln_show_hide(monitor_t *);
+static void cln_set_tag(client_t *, uint32_t, bool);
 static void tab_attach(client_t *, xcb_window_t);
 static void tab_detach(client_t *, xcb_window_t);
 static void tab_draw(client_t *);
@@ -950,6 +951,7 @@ void cln_resize(client_t *c, int w, int h)
   vals[0] = c->w = w;
   vals[1] = c->h = h;
   xcb_configure_window(conn, c->frame, masks, vals);
+  vals[1] = c->h - VXWM_TAB_HEIGHT;
   xcb_configure_window(conn, c->tab[c->ft], masks, vals);
   tab_draw(c);
 }
@@ -969,6 +971,24 @@ void cln_show_hide(monitor_t *m)
       cln_move_resize(c, c->x, c->y, c->w, c->h);
     else
       cln_move(c, scr->width_in_pixels, 0);
+}
+
+void cln_set_tag(client_t *c, uint32_t tag, bool toggle)
+{
+  xassert(c && tag, "bad call to cln_set_tag");
+
+  if (toggle && (tag ^= c->tag) == 0)
+    return;
+  c->tag = tag;
+  if (!INPAGE(c)) {
+    if (c->sel) {
+      c->sel = 0;
+      ns--;
+    }
+    cln_show_hide(fm);
+    cln_set_focus(NULL);
+    mon_arrange(fm);
+  }
 }
 
 client_t *next_inpage(client_t *c)
@@ -1368,30 +1388,14 @@ void bn_focus_page(const arg_t *arg)
 
 void bn_toggle_tag(const arg_t *arg)
 {
-  uint32_t page_tag = arg->u32;
-
-  if (!fc || (page_tag ^= fc->tag) == 0)
-    return;
-  fc->tag = page_tag; 
-  if (!INPAGE(fc)) {
-    cln_show_hide(fm);
-    cln_set_focus(NULL);
-    mon_arrange(fm);
-  }
+  if (fc)
+    cln_set_tag(fc, arg->u32, true);
 }
 
 void bn_set_tag(const arg_t *arg)
 {
-  uint32_t page_tag = arg->u32;
-
-  if (!fc || page_tag == 0)
-    return;
-  fc->tag = page_tag;
-  if (!INPAGE(fc)) {
-    cln_set_focus(NULL);
-    cln_show_hide(fm);
-    mon_arrange(fm);
-  }
+  if (fc)
+    cln_set_tag(fc, arg->u32, false);
 }
 
 void bn_set_param(const arg_t *arg)
