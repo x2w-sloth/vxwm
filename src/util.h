@@ -14,22 +14,22 @@
 #define SWAP_BITS(X, A, B)  {uint32_t XOR = (((X)>>(A)) ^ ((X)>>(B))) & 1; \
                                       (X) ^= (XOR<<(A)) | (XOR<<(B));}
 #define LENGTH(ARR)         (sizeof(ARR) / sizeof(*ARR))
-#define UNUSED(PTR)         (void)(PTR)
+
+#ifdef __GNUC__
+#  define UNUSED            __attribute__((unused))
+#else
+#  define UNUSED
+#endif
 
 #ifdef VXWM_DEBUG
-
-# define log(...) { \
+#  define log(...) { \
   fprintf(VXWM_LOG_FILE, __VA_ARGS__); \
   fputc('\n', VXWM_LOG_FILE); \
 }
-
 void xassert(bool, const char *);
-
 #else
-
-# define log(...)
-# define xassert(...)
-
+#  define log(...)
+#  define xassert(...)
 #endif // VXWM_DEBUG
 
 void *xmalloc(size_t);

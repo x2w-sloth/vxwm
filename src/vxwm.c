@@ -416,6 +416,7 @@ xcb_atom_t get_atom_prop(xcb_window_t win, xcb_atom_t prop)
   return *atom;
 }
 
+UNUSED
 bool get_text_prop(xcb_window_t win, xcb_atom_t prop, char *text, size_t tsize)
 {
   xcb_get_property_reply_t *reply;
@@ -533,6 +534,7 @@ void on_motion_notify(xcb_generic_event_t *ge)
   xcb_flush(conn);
 }
 
+UNUSED
 void on_enter_notify(xcb_generic_event_t *ge)
 {
   xcb_enter_notify_event_t *e = (xcb_enter_notify_event_t *)ge;
@@ -1038,9 +1040,8 @@ client_t *frame_to_cln(xcb_window_t frame)
   return NULL;
 }
 
-void bn_quit(const arg_t *arg)
+void bn_quit(UNUSED const arg_t *arg)
 {
-  UNUSED(arg);
   running = false;
 }
 
@@ -1057,9 +1058,8 @@ void bn_spawn(const arg_t *arg)
   }
 }
 
-void bn_kill_tab(const arg_t *arg)
+void bn_kill_tab(UNUSED const arg_t *arg)
 {
-  UNUSED(arg);
   client_t *c;
   int i;
 
@@ -1158,24 +1158,18 @@ void bn_swap_cln(const arg_t *arg)
   mon_arrange(fm);
 }
 
-void bn_move_cln(const arg_t *arg)
+void bn_move_cln(UNUSED const arg_t *arg)
 {
-  UNUSED(arg);
-
   ptr_motion(PtrMoveCln);
 }
 
-void bn_resize_cln(const arg_t *arg)
+void bn_resize_cln(UNUSED const arg_t *arg)
 {
-  UNUSED(arg);
-
   ptr_motion(PtrResizeCln);
 }
 
-void bn_toggle_select(const arg_t *arg)
+void bn_toggle_select(UNUSED const arg_t *arg)
 {
-  UNUSED(arg);
-
   if (!fc)
     return;
 
@@ -1185,10 +1179,8 @@ void bn_toggle_select(const arg_t *arg)
   xcb_flush(conn);
 }
 
-void bn_toggle_float(const arg_t *arg)
+void bn_toggle_float(UNUSED const arg_t *arg)
 {
-  UNUSED(arg);
-
   if (!fc)
     return;
 
@@ -1196,10 +1188,8 @@ void bn_toggle_float(const arg_t *arg)
   mon_arrange(fm);
 }
 
-void bn_toggle_fullscr(const arg_t *arg)
+void bn_toggle_fullscr(UNUSED const arg_t *arg)
 {
-  UNUSED(arg);
-
   if (!fc)
     return;
 
@@ -1213,7 +1203,6 @@ void bn_toggle_fullscr(const arg_t *arg)
 
 void bn_merge_cln(const arg_t *arg)
 {
-  UNUSED(arg);
   client_t *c, *d, *mc;
   xcb_window_t win;
   int i;
@@ -1257,9 +1246,8 @@ void bn_merge_cln(const arg_t *arg)
   mon_arrange(fm);
 }
 
-void bn_split_cln(const arg_t *arg)
+void bn_split_cln(UNUSED const arg_t *arg)
 {
-  UNUSED(arg);
   client_t *c, *sc = NULL;
   xcb_window_t win;
   int i;
