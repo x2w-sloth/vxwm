@@ -577,15 +577,15 @@ void on_unmap_notify(xcb_generic_event_t *ge)
 {
   xcb_unmap_notify_event_t *e = (xcb_unmap_notify_event_t *)ge;
   client_t *c;
+  arg_t arg = { .t = This };
 
   if ((c = tab_to_cln(e->window))) {
     tab_detach(c, e->window);
     if (c->nt == 0)
       cln_unmanage(c);
     else
-      tab_draw(c);
+      bn_focus_tab(&arg);
   }
-  xcb_flush(conn);
 }
 
 void on_map_request(xcb_generic_event_t *ge)
