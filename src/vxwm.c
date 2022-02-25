@@ -760,9 +760,9 @@ void cln_unmanage(client_t *c)
   // determine focus fallback
   if (!(fb = next_inpage(c->next)))
     fb = prev_inpage(c);
-  cln_set_focus(fb);
   cln_detach(c);
   cln_delete(c);
+  cln_set_focus(fb);
   mon_arrange(fm);
 }
 
@@ -1369,8 +1369,8 @@ void bn_focus_page(const arg_t *arg)
 
   log("focus page %s", pages[arg->i].sym);
   fm->fp = arg->i;
-  cln_set_focus(NULL);
   cln_show_hide(fm);
+  cln_set_focus(NULL);
   mon_arrange(fm);
 }
 

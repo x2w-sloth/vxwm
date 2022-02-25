@@ -30,6 +30,7 @@ void draw_cleanup(void)
 void draw_copy(xcb_drawable_t dst, int x, int y, int w, int h)
 {
   xcb_copy_area(conn, pixmap, dst, gc, x, y, x, y, w, h);
+  xcb_flush(conn);
 }
 
 void draw_rect(int x, int y, int w, int h, uint32_t color)
