@@ -4,6 +4,14 @@
 #define CTRL     XCB_MOD_MASK_CONTROL
 #define PAGE(P)  (1 << (P))
 
+#define VXWM_CLN_BORDER_W     4
+#define VXWM_CLN_NORMAL_CLR   0x6B6B6B 
+#define VXWM_CLN_FOCUS_CLR    0x00FFFF 
+#define VXWM_TAB_HEIGHT       8
+#define VXWM_TAB_NORMAL_CLR   VXWM_CLN_NORMAL_CLR
+#define VXWM_TAB_FOCUS_CLR    VXWM_CLN_FOCUS_CLR
+#define VXWM_TAB_SELECT_CLR   0xFFA500
+
 static layout_t layouts[] = {
   { "COL", column },
   { "STK", stack },
