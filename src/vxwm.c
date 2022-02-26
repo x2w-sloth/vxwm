@@ -916,12 +916,12 @@ void tab_draw(client_t *c)
     return;
   tw = c->w / c->nt;
   sw = VXWM_TAB_HEIGHT / 2;
-  draw_rect(0, 0, c->w, VXWM_TAB_HEIGHT, VXWM_TAB_NORMAL_CLR);
+  draw_rect_filled(0, 0, c->w, VXWM_TAB_HEIGHT, VXWM_TAB_NORMAL_CLR);
   if (c == fc)
-    draw_rect(tw * c->ft, 0, tw, VXWM_TAB_HEIGHT, VXWM_TAB_FOCUS_CLR);
+    draw_rect_filled(tw * c->ft, 0, tw, VXWM_TAB_HEIGHT, VXWM_TAB_FOCUS_CLR);
   for (i = 0; i < c->nt; i++)
     if (c->sel & LSB(i))
-      draw_rect((i + 0.25) * tw, sw / 2, tw / 2, sw, VXWM_TAB_SELECT_CLR);
+      draw_rect_filled((i + 0.25) * tw, sw / 2, tw / 2, sw, VXWM_TAB_SELECT_CLR);
   draw_copy(c->frame, 0, 0, c->w, VXWM_TAB_HEIGHT);
 }
 

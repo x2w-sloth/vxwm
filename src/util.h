@@ -1,11 +1,15 @@
 #ifndef VXWM_UTIL_H
 #define VXWM_UTIL_H
 
+#include <stdio.h>
 #include <stdbool.h>
 #include <stddef.h>
 #include <string.h>
 #include <xcb/xproto.h>
 #include <xcb/xcb_event.h>
+
+#define VXWM_LOG_FILE       stdout
+#define VXWM_ERR_FILE       stderr
 
 #define MIN(L, R)           ((L) < (R) ? (L) : (R))
 #define MAX(L, R)           ((L) > (R) ? (L) : (R))
