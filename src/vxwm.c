@@ -1343,7 +1343,7 @@ void bn_focus_tab(const arg_t *arg)
   // resize tab window to match client dimensions
   masks = XCB_CONFIG_WINDOW_WIDTH | XCB_CONFIG_WINDOW_HEIGHT;
   vals[0] = fc->w;
-  vals[1] = fc->h;
+  vals[1] = fc->h - VXWM_TAB_HEIGHT;
   xcb_configure_window(conn, win, masks, vals);
 
   // raise tab window and redraw client tabs
