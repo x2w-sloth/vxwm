@@ -108,7 +108,7 @@ static bool has_proto(xcb_window_t, xcb_atom_t);
 static void send_msg(xcb_window_t, xcb_atom_t);
 static xcb_atom_t get_atom_prop(xcb_window_t, xcb_atom_t);
 static bool get_text_prop(xcb_window_t, xcb_atom_t, char *, size_t);
-static void win_stack(xcb_window_t, target_t);
+static void win_stack(xcb_window_t, pos_t);
 static void win_focus(xcb_window_t);
 static void grant_configure_request(xcb_configure_request_event_t *);
 // event handlers
@@ -437,10 +437,10 @@ bool get_text_prop(xcb_window_t win, xcb_atom_t prop, char *text, size_t tsize)
   return true;
 }
 
-void win_stack(xcb_window_t win, target_t t)
+void win_stack(xcb_window_t win, pos_t p)
 {
   masks = XCB_CONFIG_WINDOW_STACK_MODE;
-  vals[0] = t == Top ? XCB_STACK_MODE_ABOVE : XCB_STACK_MODE_BELOW;
+  vals[0] = p == Top ? XCB_STACK_MODE_ABOVE : XCB_STACK_MODE_BELOW;
   xcb_configure_window(conn, win, masks, vals);
 }
 
@@ -561,7 +561,7 @@ void on_destroy_notify(xcb_generic_event_t *ge)
 {
   xcb_destroy_notify_event_t *e = (xcb_destroy_notify_event_t *)ge;
   client_t *c = tab_to_cln(e->window);
-  arg_t arg = { .t = This };
+  arg_t arg = { .p = This };
 
   if (!c)
     return;
@@ -577,7 +577,7 @@ void on_unmap_notify(xcb_generic_event_t *ge)
 {
   xcb_unmap_notify_event_t *e = (xcb_unmap_notify_event_t *)ge;
   client_t *c;
-  arg_t arg = { .t = This };
+  arg_t arg = { .p = This };
 
   if ((c = tab_to_cln(e->window))) {
     tab_detach(c, e->window);
@@ -1082,7 +1082,7 @@ void bn_swap_tab(const arg_t *arg)
   if (!fc || fc->nt == 1)
     return;
 
-  switch (arg->t) {
+  switch (arg->p) {
     case First:
     case Top:
       swp = 0;
@@ -1113,7 +1113,7 @@ void bn_swap_cln(const arg_t *arg)
   if (!fc || fc->isfloating || !next_tiled(c->next))
     return;
 
-  switch (arg->t) {
+  switch (arg->p) {
     case First:
       if (next_tiled(fm->cln) == fc)
         return;
@@ -1212,7 +1212,7 @@ void bn_merge_cln(const arg_t *arg)
     return;
 
   // determine merge destination
-  switch (arg->t) {
+  switch (arg->p) {
     case This:
       mc = fc;
       break;
@@ -1288,7 +1288,7 @@ void bn_focus_cln(const arg_t *arg)
   if (!fc || fc->isfullscr)
     return;
 
-  switch (arg->t) {
+  switch (arg->p) {
     case Prev:
       if ((c = prev_inpage(fc)) == NULL) // wrap to last in page
         for (c = fc; next_inpage(c->next); c = next_inpage(c->next)) ;
@@ -1315,7 +1315,7 @@ void bn_focus_cln(const arg_t *arg)
 
 void bn_focus_tab(const arg_t *arg)
 {
-  target_t t = arg->t;
+  pos_t p = arg->p;
   xcb_window_t win;
   int n;
 
@@ -1323,7 +1323,7 @@ void bn_focus_tab(const arg_t *arg)
     return;
 
   n = fc->nt;
-  switch (t) {
+  switch (p) {
     case First:
     case Top:
       fc->ft = 0;
@@ -1335,7 +1335,7 @@ void bn_focus_tab(const arg_t *arg)
     case Prev:
     case This:
     case Next:
-      fc->ft = (fc->ft + (int)t + n) % n;
+      fc->ft = (fc->ft + (int)p + n) % n;
       break;
   }
   win = fc->tab[fc->ft];

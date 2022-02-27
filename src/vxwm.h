@@ -15,9 +15,9 @@
 
 #include <xcb/xproto.h>
 
-typedef enum { Prev = -1, This, Next, First, Last, Top, Bottom } target_t;
+typedef enum { Prev = -1, This, Next, First, Last, Top, Bottom } pos_t;
 typedef enum { PtrUngrabbed = 0, PtrMoveCln, PtrResizeCln } ptr_state_t;
-typedef union { int i; uint32_t u32; target_t t; const void *v; } arg_t;
+typedef union { int i; uint32_t u32; pos_t p; const void *v; } arg_t;
 typedef struct monitor monitor_t;
 typedef struct page page_t;
 typedef struct layout layout_t;
