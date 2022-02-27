@@ -28,6 +28,7 @@ struct monitor {
   client_t *cln;       // clients under this monitor
   int np, fp;          // number of pages, index of focus page
   int lx, ly, lw, lh;  // layout space where tiled clients are arranged in
+  xcb_window_t barwin; // status bar window
 };
 
 // a page displays a subset of clients under a layout policy
@@ -121,10 +122,11 @@ static void on_destroy_notify(xcb_generic_event_t *);
 static void on_unmap_notify(xcb_generic_event_t *);
 static void on_map_request(xcb_generic_event_t *);
 static void on_configure_request(xcb_generic_event_t *);
-// monitors and pages
+// monitors and bars
 static monitor_t *mon_create(void);
 static void mon_delete(monitor_t *);
 static void mon_arrange(monitor_t *);
+static void bar_draw(monitor_t *);
 // clients and tabs
 static client_t *cln_create(void);
 static void cln_manage(xcb_window_t);
@@ -268,6 +270,7 @@ void run(void)
   xcb_generic_event_t *ge;
   uint8_t type;
 
+  bar_draw(fm);
   xcb_flush(conn);
   while (running && (ge = xcb_wait_for_event(conn))) {
     type = XCB_EVENT_RESPONSE_TYPE(ge);
@@ -648,15 +651,26 @@ monitor_t *mon_create(void)
   m->np = LENGTH(pages);
   m->fp = 0;
   m->lx = 0;
-  m->ly = 0;
+  m->ly = VXWM_BAR_H;
   m->lw = scr->width_in_pixels - m->lx;
   m->lh = scr->height_in_pixels - m->ly;
+  m->barwin = xcb_generate_id(conn);
+
+  masks = XCB_CW_OVERRIDE_REDIRECT | XCB_CW_EVENT_MASK;
+  vals[0] = 1;
+  vals[1] = XCB_EVENT_MASK_EXPOSURE;
+  xcb_create_window(conn, scr->root_depth, m->barwin, root,
+                    0, 0, scr->width_in_pixels, VXWM_BAR_H, 0,
+                    XCB_WINDOW_CLASS_INPUT_OUTPUT, scr->root_visual, masks, vals);
+  xcb_map_window(conn, m->barwin);
   return m;
 }
 
 void mon_delete(monitor_t *m)
 {
   // xassert(!m->cln, "deleting a monitor with clients");
+  xcb_unmap_window(conn, m->barwin);
+  xcb_destroy_window(conn, m->barwin);
   xfree(m);
 }
 
@@ -694,8 +708,33 @@ void mon_arrange(monitor_t *m)
   // the layout may modify page parameters as they see fit
   if (arg.ntiled > 0)
     pages[m->fp].lt->fn(&arg);
+  bar_draw(m);
   xcb_flush(conn);
   log("arranged page %s with %s", pages[m->fp].sym, pages[m->fp].lt->sym);
+}
+
+void bar_draw(monitor_t *m)
+{
+  const color_t fg = 0xCCCCCC;
+  const color_t bg = 0x333333;
+  int i, n, x, tw;
+
+  draw_rect_filled(0, 0, scr->width_in_pixels, VXWM_BAR_H, bg);
+
+  // draw page symbols
+  n = LENGTH(pages);
+  for (i = 0, x = 0; i < n; i++, x += tw) {
+    draw_text_extents(pages[i].sym, &tw, NULL);
+    tw += 28;
+    if (i == m->fp) {
+      draw_rect_filled(x, 0, tw, VXWM_BAR_H, fg);
+      draw_text(x, 0, tw, VXWM_BAR_H, pages[i].sym, bg, 14);
+    } else {
+      draw_rect_filled(x, 0, tw, VXWM_BAR_H, bg);
+      draw_text(x, 0, tw, VXWM_BAR_H, pages[i].sym, fg, 14);
+    }
+  }
+  draw_copy(m->barwin, 0, 0, scr->width_in_pixels, VXWM_BAR_H);
 }
 
 client_t *cln_create()

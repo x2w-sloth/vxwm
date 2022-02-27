@@ -11,6 +11,7 @@
 #define VXWM_TAB_NORMAL_CLR   VXWM_CLN_NORMAL_CLR
 #define VXWM_TAB_FOCUS_CLR    VXWM_CLN_FOCUS_CLR
 #define VXWM_TAB_SELECT_CLR   0xFFA500
+#define VXWM_BAR_H            32
 
 static layout_t layouts[] = {
   { "COL", column },
