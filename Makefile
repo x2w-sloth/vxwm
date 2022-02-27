@@ -5,16 +5,18 @@ INSDIR  := /usr/local/bin
 SRC     := $(wildcard $(SRCDIR)/*.c)
 OBJ     := $(patsubst $(SRCDIR)/%.c, %.o, $(SRC))
 
-all: clean vxwm
+all: vxwm
 
 %.o: $(SRCDIR)/%.c
 	$(CC) $(CFLAGS) -c $< -o $@
 
+vxwm: LDFLAGS += -s
 vxwm: clean $(OBJ)
-	$(CC) $(LDFLAGS) $(OBJ) -o $@
+	$(CC) $(OBJ) -o $@ $(LDFLAGS)
 
-debug: CFLAGS += -DVXWM_DEBUG
-debug: clean vxwm
+debug: CFLAGS += -DVXWM_DEBUG -g
+debug: clean $(OBJ)
+	$(CC) $(OBJ) -o vxwm $(LDFLAGS)
 
 clean:
 	rm -f *.o vxwm
