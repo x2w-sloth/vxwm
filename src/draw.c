@@ -18,6 +18,7 @@ static cairo_surface_t *surface;
 static cairo_t *cr;
 static color_t source_clr;
 static double source_lw;
+static double font_height, font_descent;
 
 xcb_visualtype_t *get_visual_type(xcb_screen_t *scr)
 {
@@ -58,6 +59,7 @@ void draw_setup(void)
   uint32_t scrw = scr->width_in_pixels, scrh = scr->height_in_pixels;
   uint32_t val = 0;
   xcb_visualtype_t *vt;
+  cairo_font_extents_t fe;
 
   // setup xcb graphics context and pixmap buffer
   gc = xcb_generate_id(conn);
@@ -71,6 +73,13 @@ void draw_setup(void)
   if (cairo_surface_status(surface) != CAIRO_STATUS_SUCCESS)
     die("failed to allocate surface on pixmap");
   cr = cairo_create(surface);
+
+  // initialize font
+  cairo_select_font_face(cr, "monospace", CAIRO_FONT_SLANT_NORMAL, CAIRO_FONT_WEIGHT_NORMAL);
+  cairo_set_font_size(cr, 20);
+  cairo_font_extents(cr, &fe);
+  font_height = fe.height;
+  font_descent = fe.descent;
 }
 
 void draw_cleanup(void)
@@ -87,7 +96,7 @@ void draw_copy(xcb_drawable_t dst, int x, int y, int w, int h)
   xcb_flush(conn);
 }
 
-void draw_rect(int x, int y, int w, int h, uint32_t clr, double lw)
+void draw_rect(int x, int y, int w, int h, color_t clr, double lw)
 {
   draw_set_color(clr);
   draw_set_line_width(lw);
@@ -95,11 +104,29 @@ void draw_rect(int x, int y, int w, int h, uint32_t clr, double lw)
   cairo_stroke(cr);
 }
 
-void draw_rect_filled(int x, int y, int w, int h, uint32_t clr)
+void draw_rect_filled(int x, int y, int w, int h, color_t clr)
 {
   draw_set_color(clr);
   cairo_rectangle(cr, x, y, w, h);
   cairo_fill(cr);
+}
+
+void draw_text_extents(const char *text, int *tw, int *th)
+{
+  cairo_text_extents_t te;
+
+  cairo_text_extents(cr, text, &te);
+  if (tw) // slighter larger than actual glyph width
+    *tw = te.x_advance;
+  if (th)
+    *th = te.height;
+}
+
+void draw_text(int x, int y, int w, int h, const char *text, color_t clr, int lpad)
+{
+  draw_set_color(clr);
+  cairo_move_to(cr, x + lpad, y + h/2. + font_height/2. - font_descent);
+  cairo_show_text(cr, text);
 }
 
 // vim: ts=2:sw=2:et
