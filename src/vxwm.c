@@ -29,6 +29,7 @@ struct monitor {
   int np, fp;          // number of pages, index of focus page
   int lx, ly, lw, lh;  // layout space where tiled clients are arranged in
   xcb_window_t barwin; // status bar window
+  char lt_status[32];  // layout status
 };
 
 // a page displays a subset of clients under a layout policy
@@ -706,6 +707,7 @@ void mon_arrange(monitor_t *m)
   }
 
   // the layout may modify page parameters as they see fit
+  memset(m->lt_status, 0, sizeof(m->lt_status));
   if (arg.ntiled > 0)
     pages[m->fp].lt->fn(&arg);
   bar_draw(m);
@@ -717,7 +719,7 @@ void bar_draw(monitor_t *m)
 {
   const color_t fg = 0xCCCCCC;
   const color_t bg = 0x333333;
-  int i, n, x, tw;
+  int i, n, x, tw, pad = 28;
 
   draw_rect_filled(0, 0, scr->width_in_pixels, VXWM_BAR_H, bg);
 
@@ -725,15 +727,24 @@ void bar_draw(monitor_t *m)
   n = LENGTH(pages);
   for (i = 0, x = 0; i < n; i++, x += tw) {
     draw_text_extents(pages[i].sym, &tw, NULL);
-    tw += 28;
+    tw += pad;
     if (i == m->fp) {
       draw_rect_filled(x, 0, tw, VXWM_BAR_H, fg);
-      draw_text(x, 0, tw, VXWM_BAR_H, pages[i].sym, bg, 14);
+      draw_text(x, 0, tw, VXWM_BAR_H, pages[i].sym, bg, pad / 2);
     } else {
       draw_rect_filled(x, 0, tw, VXWM_BAR_H, bg);
-      draw_text(x, 0, tw, VXWM_BAR_H, pages[i].sym, fg, 14);
+      draw_text(x, 0, tw, VXWM_BAR_H, pages[i].sym, fg, pad / 2);
     }
   }
+
+  // draw layout status
+  draw_text_extents(m->lt_status, &tw, NULL);
+  pad = 8;
+  tw += pad;
+  draw_rect_filled(x, 0, tw, VXWM_BAR_H, bg);
+  draw_text(x, 0, tw, VXWM_BAR_H, m->lt_status, fg, pad / 2);
+  x += tw;
+
   draw_copy(m->barwin, 0, 0, scr->width_in_pixels, VXWM_BAR_H);
 }
 
@@ -1455,6 +1466,8 @@ void column(const layout_arg_t *arg)
   colw = m->lw / cols;
   h = m->lh / (n-cols+1);
 
+  snprintf(m->lt_status, 32, "[%d COL]", arg->par[0]);
+
   for (c = next_tiled(arg->mon->cln), i = 0; c; c = next_tiled(c->next), i++)
     if (i < cols - 1)
       cln_move_resize(c, m->lx + i * colw, m->ly, colw - BORDER, m->lh - BORDER);
@@ -1480,6 +1493,8 @@ void stack(const layout_arg_t *arg)
     rw = 0;
   } else
     lw = rw = m->lw / 2;
+
+  snprintf(m->lt_status, 32, "[%d/%d STK]", arg->par[0], rn);
 
   for (c = next_tiled(arg->mon->cln), i = 0; c; c = next_tiled(c->next), i++)
     if (i < ln)
