@@ -124,6 +124,8 @@ void draw_text_extents(const char *text, int *tw, int *th)
 
 void draw_text(int x, int y, int w, int h, const char *text, color_t clr, int lpad)
 {
+  if (strlen(text) == 0)
+    return;
   draw_set_color(clr);
   cairo_move_to(cr, x + lpad, y + h/2. + font_height/2. - font_descent);
   cairo_show_text(cr, text);

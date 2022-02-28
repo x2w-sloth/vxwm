@@ -656,6 +656,7 @@ monitor_t *mon_create(void)
   m->lw = scr->width_in_pixels - m->lx;
   m->lh = scr->height_in_pixels - m->ly;
   m->barwin = xcb_generate_id(conn);
+  memset(m->lt_status, 0, sizeof(m->lt_status));
 
   masks = XCB_CW_OVERRIDE_REDIRECT | XCB_CW_EVENT_MASK;
   vals[0] = 1;
