@@ -13,14 +13,9 @@
 #define VXWM_TAB_SELECT_CLR   0xFFA500
 #define VXWM_BAR_H            32
 
-static layout_t layouts[] = {
-  { "COL", column },
-  { "STK", stack },
-};
-
 static page_t pages[] = {
-  { "1", &layouts[0], {  3, -1, -1 } },
-  { "2", &layouts[1], {  2, -1, -1 } },
+  { "1", column, {  3, -1, -1 } },
+  { "2", stack,  {  2, -1, -1 } },
 };
 
 static const char *termcmd[] = { "st", NULL };
@@ -49,8 +44,8 @@ static keybind_t keybinds[] = {
   { MOD|SHIFT,   XK_k,       bn_swap_cln,       { .p = Prev } },
   { MOD|SHIFT,   XK_l,       bn_swap_tab,       { .p = Next } },
   { MOD|SHIFT,   XK_h,       bn_swap_tab,       { .p = Prev } },
-  { MOD|ALT,     XK_o,       bn_set_layout,     { .i = 0 } },
-  { MOD|ALT,     XK_i,       bn_set_layout,     { .i = 1 } },
+  { MOD|ALT,     XK_o,       bn_set_layout,     { .lt = column } },
+  { MOD|ALT,     XK_i,       bn_set_layout,     { .lt = stack } },
   { MOD|ALT,     XK_j,       bn_set_param,      { .v = decp1 } },
   { MOD|ALT,     XK_k,       bn_set_param,      { .v = incp1 } },
   { MOD|ALT,     XK_l,       bn_set_param,      { .v = incp0 } },

@@ -35,14 +35,8 @@ struct monitor {
 // a page displays a subset of clients under a layout policy
 struct page {
   const char *sym;     // page identifier string
-  layout_t *lt;        // layout policy for this page
+  layout_t lt;         // layout policy for this page
   int par[3];          // layout parameters
-};
-
-// a layout arranges tiled cilents in a page
-struct layout {
-  const char *sym;     // layout identifer string
-  void (*fn)(const layout_arg_t *); // arrangement function
 };
 
 // context for layout arrangement function
@@ -710,10 +704,10 @@ void mon_arrange(monitor_t *m)
   // the layout may modify page parameters as they see fit
   memset(m->lt_status, 0, sizeof(m->lt_status));
   if (arg.ntiled > 0)
-    pages[m->fp].lt->fn(&arg);
+    pages[m->fp].lt(&arg);
   bar_draw(m);
   xcb_flush(conn);
-  log("arranged page %s with %s", pages[m->fp].sym, pages[m->fp].lt->sym);
+  log("arranged page %s", pages[m->fp].sym);
 }
 
 void bar_draw(monitor_t *m)
@@ -1447,8 +1441,7 @@ void bn_set_param(const arg_t *arg)
 
 void bn_set_layout(const arg_t *arg)
 {
-  xassert(arg->i < (int)LENGTH(layouts), "bad call to bn_set_layout");
-  pages[fm->fp].lt = &layouts[arg->i];
+  pages[fm->fp].lt = arg->lt;
   mon_arrange(fm);
 }
 
