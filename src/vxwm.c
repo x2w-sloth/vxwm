@@ -13,6 +13,12 @@
 #include "util.h"
 #include "draw.h"
 
+#define VXWM_CLN_MIN_W           30
+#define VXWM_CLN_MIN_H           30
+#define VXWM_TAB_NAME_BUF        128
+#define BORDER                   2 * VXWM_CLN_BORDER_W
+#define INPAGE(C)                (C->tag & 1 << fm->fp)
+
 #define VXWM_ROOT_EVENT_MASK    (XCB_EVENT_MASK_SUBSTRUCTURE_NOTIFY |\
                                  XCB_EVENT_MASK_SUBSTRUCTURE_REDIRECT)
 
@@ -59,6 +65,7 @@ struct client {
   int px, py, pw, ph;  // previous client dimensions
   bool isfloating;     // client is floating
   bool isfullscr;      // client wishes to be fullscreen
+  char (*name)[VXWM_TAB_NAME_BUF]; // name buffer for tabs
 };
 
 // key bindings
@@ -751,6 +758,7 @@ client_t *cln_create()
   c = xmalloc(sizeof(client_t));
   c->next = NULL;
   c->tab = xmalloc(sizeof(xcb_window_t));
+  c->name = xmalloc(VXWM_TAB_NAME_BUF);
   c->tag = LSB(fm->fp);
   c->sel = 0;
   c->tcap = 1;
@@ -917,8 +925,13 @@ void tab_attach(client_t *c, xcb_window_t win)
   if (c->nt == c->tcap) {
     c->tcap <<= 1;
     c->tab = xrealloc(c->tab, sizeof(xcb_window_t) * c->tcap);
+    c->name = xrealloc(c->name, VXWM_TAB_NAME_BUF * c->tcap);
   }
-  c->tab[c->nt++] = win;
+
+  c->tab[c->nt] = win;
+  if (!get_text_prop(win, net_atom[NetWmName], c->name[c->nt], VXWM_TAB_NAME_BUF))
+    get_text_prop(win, XCB_ATOM_WM_NAME, c->name[c->nt], VXWM_TAB_NAME_BUF);
+  c->nt++;
 
   // If the window is already mapped and has the structure notify event mask,
   // then reparenting generates an unmap notify on the reparented window.

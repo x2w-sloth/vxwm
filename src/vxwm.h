@@ -8,11 +8,6 @@
                               VXWM_VERSION_MINOR "." \
                               VXWM_VERSION_PATCH
 
-#define VXWM_CLN_MIN_W        30
-#define VXWM_CLN_MIN_H        30
-#define BORDER                2 * VXWM_CLN_BORDER_W
-#define INPAGE(C)             (C->tag & (1 << fm->fp))
-
 #include <xcb/xproto.h>
 
 typedef enum { Prev = -1, This, Next, First, Last, Top, Bottom } pos_t;
