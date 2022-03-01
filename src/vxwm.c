@@ -16,11 +16,13 @@
 #define VXWM_CLN_MIN_W           30
 #define VXWM_CLN_MIN_H           30
 #define VXWM_TAB_NAME_BUF        128
+#define VXWM_ROOT_NAME_BUF       128
 #define BORDER                   2 * VXWM_CLN_BORDER_W
 #define INPAGE(C)                (C->tag & 1 << fm->fp)
 
 #define VXWM_ROOT_EVENT_MASK    (XCB_EVENT_MASK_SUBSTRUCTURE_NOTIFY |\
-                                 XCB_EVENT_MASK_SUBSTRUCTURE_REDIRECT)
+                                 XCB_EVENT_MASK_SUBSTRUCTURE_REDIRECT |\
+                                 XCB_EVENT_MASK_PROPERTY_CHANGE)
 
 #define VXWM_FRAME_EVENT_MASK   (XCB_EVENT_MASK_SUBSTRUCTURE_REDIRECT |\
                                  XCB_EVENT_MASK_EXPOSURE |\
@@ -124,6 +126,7 @@ static void on_destroy_notify(xcb_generic_event_t *);
 static void on_unmap_notify(xcb_generic_event_t *);
 static void on_map_request(xcb_generic_event_t *);
 static void on_configure_request(xcb_generic_event_t *);
+static void on_property_notify(xcb_generic_event_t *);
 // monitors and bars
 static monitor_t *mon_create(void);
 static void mon_delete(monitor_t *);
@@ -193,6 +196,7 @@ static int ptr_x, ptr_y;
 static int win_x, win_y, win_w, win_h;
 static int ns;
 static uint32_t vals[8], masks;
+static char root_name[VXWM_ROOT_NAME_BUF];
 xcb_connection_t *conn;
 xcb_screen_t *scr;
 xcb_window_t root;
@@ -256,11 +260,12 @@ void setup(void)
   handler[XCB_UNMAP_NOTIFY]    = on_unmap_notify;
   handler[XCB_MAP_REQUEST]     = on_map_request;
   handler[XCB_CONFIGURE_REQUEST] = on_configure_request;
-//handler[XCB_PROPERTY_NOTIFY] = on_property_notify;
+  handler[XCB_PROPERTY_NOTIFY] = on_property_notify;
 //handler[XCB_CLIENT_MESSAGE]  = on_client_message;
 //handler[XCB_MAPPING_NOTIFY]  = on_mapping_notify;
 
   // initialize status globals
+  strncpy(root_name, "vxwm "VXWM_VERSION, VXWM_ROOT_NAME_BUF);
   ptr_state = PtrUngrabbed;
   fc = NULL;
   ns = 0;
@@ -421,7 +426,6 @@ xcb_atom_t get_atom_prop(xcb_window_t win, xcb_atom_t prop)
   return *atom;
 }
 
-UNUSED
 bool get_text_prop(xcb_window_t win, xcb_atom_t prop, char *text, size_t tsize)
 {
   xcb_get_property_reply_t *reply;
@@ -643,6 +647,17 @@ void on_configure_request(xcb_generic_event_t *ge)
   xcb_flush(conn);
 }
 
+void on_property_notify(xcb_generic_event_t *ge)
+{
+  xcb_property_notify_event_t *e = (xcb_property_notify_event_t *)ge;
+
+  if (e->window == root && e->atom == XCB_ATOM_WM_NAME) {
+    get_text_prop(root, XCB_ATOM_WM_NAME, root_name, VXWM_ROOT_NAME_BUF);
+    bar_draw(fm);
+  }
+  xcb_flush(conn);
+}
+
 monitor_t *mon_create(void)
 {
   monitor_t *m;
@@ -653,9 +668,9 @@ monitor_t *mon_create(void)
   m->np = LENGTH(pages);
   m->fp = 0;
   m->lx = 0;
-  m->ly = VXWM_BAR_H;
+  m->ly = 0;
   m->lw = scr->width_in_pixels - m->lx;
-  m->lh = scr->height_in_pixels - m->ly;
+  m->lh = scr->height_in_pixels - m->ly - VXWM_BAR_H;
   m->barwin = xcb_generate_id(conn);
   memset(m->lt_status, 0, sizeof(m->lt_status));
 
@@ -663,7 +678,7 @@ monitor_t *mon_create(void)
   vals[0] = 1;
   vals[1] = XCB_EVENT_MASK_EXPOSURE;
   xcb_create_window(conn, scr->root_depth, m->barwin, root,
-                    0, 0, scr->width_in_pixels, VXWM_BAR_H, 0,
+                    0, m->lh, scr->width_in_pixels, VXWM_BAR_H, 0,
                     XCB_WINDOW_CLASS_INPUT_OUTPUT, scr->root_visual, masks, vals);
   xcb_map_window(conn, m->barwin);
   return m;
@@ -746,6 +761,11 @@ void bar_draw(monitor_t *m)
   tw += pad;
   draw_text(x, 0, tw, VXWM_BAR_H, m->lt_status, fg, pad / 2);
   x += tw;
+
+  // draw root window title
+  draw_text_extents(root_name, &tw, NULL);
+  tw += pad;
+  draw_text(scr->width_in_pixels - tw, 0, tw, VXWM_BAR_H, root_name, fg, pad / 2);
 
   draw_copy(m->barwin, 0, 0, scr->width_in_pixels, VXWM_BAR_H);
 }
