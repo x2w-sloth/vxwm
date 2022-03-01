@@ -727,8 +727,9 @@ void bar_draw(monitor_t *m)
       draw_rect_filled(x, 0, tw, VXWM_BAR_H, fg);
       draw_text(x, 0, tw, VXWM_BAR_H, pages[i].sym, bg, pad / 2);
     } else {
-      draw_rect_filled(x, 0, tw, VXWM_BAR_H, bg);
       draw_text(x, 0, tw, VXWM_BAR_H, pages[i].sym, fg, pad / 2);
+      if (fc && (LSB(i) & fc->tag))
+        draw_rect_filled(x + 5, 5, 5, 5, fg);
     }
   }
 
@@ -736,7 +737,6 @@ void bar_draw(monitor_t *m)
   draw_text_extents(m->lt_status, &tw, NULL);
   pad = 8;
   tw += pad;
-  draw_rect_filled(x, 0, tw, VXWM_BAR_H, bg);
   draw_text(x, 0, tw, VXWM_BAR_H, m->lt_status, fg, pad / 2);
   x += tw;
 
@@ -1355,6 +1355,7 @@ void bn_focus_cln(const arg_t *arg)
       break;
   }
   cln_set_focus(c);
+  bar_draw(fm);
   xcb_flush(conn);
 }
 
@@ -1423,12 +1424,14 @@ void bn_toggle_tag(const arg_t *arg)
 {
   if (fc)
     cln_set_tag(fc, arg->u32, true);
+  bar_draw(fm);
 }
 
 void bn_set_tag(const arg_t *arg)
 {
   if (fc)
     cln_set_tag(fc, arg->u32, false);
+  bar_draw(fm);
 }
 
 void bn_set_param(const arg_t *arg)
