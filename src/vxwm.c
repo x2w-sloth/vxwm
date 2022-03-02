@@ -223,10 +223,10 @@ void setup(void)
   // connect to X server
   conn = xcb_connect(NULL, NULL);
   if (!conn || xcb_connection_has_error(conn))
-    die("failed to connect to x server");
+    die("failed to connect to x server\n");
   scr = xcb_setup_roots_iterator(xcb_get_setup(conn)).data;
   if (!scr)
-    die("failed to capture screen");
+    die("failed to capture screen\n");
 
   // configure root window, check if another wm is running
   root = scr->root;
@@ -235,7 +235,8 @@ void setup(void)
   error = xcb_request_check(conn, cookie);
   xcb_flush(conn);
   if (error)
-    die("another window manager is running");
+    die("another window manager is running\n");
+  LOGV("configured root window %d\n", root)
 
   // setup monitors, initialize drawing context and atoms
   fm = mon_create();
@@ -245,7 +246,7 @@ void setup(void)
   // load symbols and grab keys on root window
   symbols = xcb_key_symbols_alloc(conn);
   if (!symbols)
-    die("failed to allocate key symbol table");
+    die("failed to allocate key symbol table\n");
   grab_keys();
   xcb_flush(conn);
 
@@ -390,7 +391,7 @@ bool has_proto(xcb_window_t win, xcb_atom_t proto)
 
   cookie = xcb_icccm_get_wm_protocols_unchecked(conn, win, wm_atom[WmProtocols]);
   if (!xcb_icccm_get_wm_protocols_reply(conn, cookie, &reply, NULL)) {
-    log("failed to retrieve wm protocols for %d", win);
+    LOGW("failed to retrieve wm protocols for %d\n", win)
     return false;
   }
 
@@ -548,7 +549,6 @@ void on_enter_notify(xcb_generic_event_t *ge)
 {
   xcb_enter_notify_event_t *e = (xcb_enter_notify_event_t *)ge;
   client_t *c;
-  log("on_enter_notify %d, mode %d", e->event, e->mode);
 
   if (e->mode != XCB_NOTIFY_MODE_NORMAL || e->detail == XCB_NOTIFY_DETAIL_INFERIOR)
     return;
@@ -729,7 +729,7 @@ void mon_arrange(monitor_t *m)
     pages[m->fp].lt(&arg);
   bar_draw(m);
   xcb_flush(conn);
-  log("arranged page %s", pages[m->fp].sym);
+  LOGI("arranged page %s\n", pages[m->fp].sym)
 }
 
 void bar_draw(monitor_t *m)
@@ -793,7 +793,7 @@ client_t *cln_create()
 
   cln_add_frame(c);
   xcb_map_window(conn, c->frame);
-  log("created client frame: %d", c->frame);
+  LOGI("created client frame: %d\n", c->frame)
   return c;
 }
 
@@ -820,7 +820,7 @@ void cln_delete(client_t *c)
   xcb_unmap_window(conn, c->frame);
   xcb_destroy_window(conn, c->frame);
   xcb_flush(conn);
-  log("destroy frame: %d", c->frame);
+  LOGI("destroy frame: %d\n", c->frame)
   xfree(c->tab);
   xfree(c);
 }
@@ -907,10 +907,10 @@ void cln_set_focus(client_t *c)
     xcb_change_window_attributes(conn, fc->frame, XCB_CW_BORDER_PIXEL, &fclr);
     win_focus(fc->tab[fc->ft]);
     tab_draw(fc);
-    log("new focus: %d", fc->frame);
+    LOGI("new focus: %d\n", fc->frame)
   } else {
     win_focus(root);
-    log("loosing focus");
+    LOGI("loosing focus\n")
   }
 
   // ignore remaining enter notify events in local event queue
@@ -970,7 +970,7 @@ void tab_detach(client_t *c, xcb_window_t win)
 
   for (i = 0; i < c->nt && c->tab[i] != win; i++) ;
   if (i >= c->nt) {
-    log("window not found in tab_detach");
+    LOGW("window not found in tab_detach\n")
     return;
   }
 
@@ -1129,7 +1129,7 @@ void bn_spawn(const arg_t *arg)
   pid_t pid = fork();
 
   if (pid == -1)
-    die("fork failed");
+    die("fork failed\n");
   else if (pid == 0) {
     execvp(*args, args);
     _exit(EXIT_SUCCESS);
@@ -1431,7 +1431,7 @@ void bn_focus_tab(const arg_t *arg)
   tab_draw(fc);
 
   xcb_flush(conn);
-  log("focusing tab %d (%d/%d)", win, fc->ft + 1, fc->nt);
+  LOGI("focusing tab %d (%d/%d)\n", win, fc->ft + 1, fc->nt)
 }
 
 void bn_focus_page(const arg_t *arg)
@@ -1446,7 +1446,7 @@ void bn_focus_page(const arg_t *arg)
     c->sel = 0;
   ns = 0;
 
-  log("focus page %s", pages[arg->i].sym);
+  LOGI("focus page %s\n", pages[arg->i].sym)
   fm->fp = arg->i;
   cln_show_hide(fm);
   cln_set_focus(NULL);
