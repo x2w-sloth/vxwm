@@ -40,8 +40,7 @@ void xfree(void *mem)
 
 void die(const char *emsg)
 {
-  fputs(emsg, VXWM_ERR_FILE);
-  fputc('\n', VXWM_ERR_FILE);
+  fputs(emsg, stderr);
   exit(EXIT_FAILURE);
 }
 
