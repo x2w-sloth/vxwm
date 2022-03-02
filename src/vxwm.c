@@ -28,7 +28,8 @@
                                  XCB_EVENT_MASK_EXPOSURE |\
                                  XCB_EVENT_MASK_ENTER_WINDOW)
 
-#define VXWM_WIN_EVENT_MASK     (XCB_EVENT_MASK_STRUCTURE_NOTIFY)
+#define VXWM_WIN_EVENT_MASK     (XCB_EVENT_MASK_STRUCTURE_NOTIFY |\
+                                 XCB_EVENT_MASK_FOCUS_CHANGE)
 
 // a monitor corresponds to a physical display and contains pages
 struct monitor {
@@ -121,6 +122,7 @@ static void on_key_press(xcb_generic_event_t *);
 static void on_button_press(xcb_generic_event_t *);
 static void on_motion_notify(xcb_generic_event_t *);
 static void on_enter_notify(xcb_generic_event_t *);
+static void on_focus_in(xcb_generic_event_t *);
 static void on_expose(xcb_generic_event_t *);
 static void on_destroy_notify(xcb_generic_event_t *);
 static void on_unmap_notify(xcb_generic_event_t *);
@@ -255,7 +257,7 @@ void setup(void)
   handler[XCB_BUTTON_PRESS]    = on_button_press;
   handler[XCB_MOTION_NOTIFY]   = on_motion_notify;
 //handler[XCB_ENTER_NOTIFY]    = on_enter_notify;
-//handler[XCB_FOCUS_IN]        = on_focus_in;     // XCB_EVENT_MASK_FOCUS_CHANGE
+  handler[XCB_FOCUS_IN]        = on_focus_in;
   handler[XCB_EXPOSE]          = on_expose;
   handler[XCB_DESTROY_NOTIFY]  = on_destroy_notify;
   handler[XCB_UNMAP_NOTIFY]    = on_unmap_notify;
@@ -502,6 +504,7 @@ void on_key_press(xcb_generic_event_t *ge)
   xcb_key_press_event_t *e = (xcb_key_press_event_t *)ge;
   xcb_keysym_t keysym = keycode_to_keysym(e->detail);
   int i, n;
+  LOGV("on_key_press: %d @ %d\n", e->event, e->sequence)
 
   for (i = 0, n = LENGTH(keybinds); i < n; i++)
     if (keysym == keybinds[i].sym && e->state == keybinds[i].mod && keybinds[i].fn)
@@ -512,6 +515,7 @@ void on_button_press(xcb_generic_event_t *ge)
 {
   xcb_button_press_event_t *e = (xcb_button_press_event_t *)ge;
   int i, n;
+  LOGV("on_button_press: %d @ %d", e->event, e->sequence)
 
   cln_set_focus(frame_to_cln(e->event));
   for (i = 0, n = LENGTH(btnbinds); i < n; i++)
@@ -557,6 +561,21 @@ void on_enter_notify(xcb_generic_event_t *ge)
   xcb_flush(conn);
 }
 
+void on_focus_in(xcb_generic_event_t *ge)
+{
+  xcb_focus_in_event_t *e = (xcb_focus_in_event_t *)ge;
+  client_t *c;
+
+  if (e->mode == XCB_NOTIFY_MODE_GRAB || e->mode == XCB_NOTIFY_MODE_UNGRAB)
+    return;
+  LOGV("on_focus_in: %d @ %d\n", e->event, e->sequence)
+
+  if ((c = tab_to_cln(e->event))) {
+    cln_set_focus(c);
+    xcb_flush(conn);
+  }
+}
+
 void on_expose(xcb_generic_event_t *ge)
 {
   xcb_expose_event_t *e = (xcb_expose_event_t *)ge;
@@ -571,6 +590,7 @@ void on_destroy_notify(xcb_generic_event_t *ge)
   xcb_destroy_notify_event_t *e = (xcb_destroy_notify_event_t *)ge;
   client_t *c = tab_to_cln(e->window);
   arg_t arg = { .p = This };
+  LOGV("on_destroy_notify: %d\n", e->window)
 
   if (!c)
     return;
@@ -587,6 +607,7 @@ void on_unmap_notify(xcb_generic_event_t *ge)
   xcb_unmap_notify_event_t *e = (xcb_unmap_notify_event_t *)ge;
   client_t *c;
   arg_t arg = { .p = This };
+  LOGV("on_unmap_notify: %d\n", e->window)
 
   if ((c = tab_to_cln(e->window))) {
     tab_detach(c, e->window);
@@ -603,6 +624,7 @@ void on_map_request(xcb_generic_event_t *ge)
   xcb_get_window_attributes_cookie_t cookie;
   xcb_get_window_attributes_reply_t *wa;
   client_t *c = tab_to_cln(e->window);
+  LOGV("on_map_request: %d\n", e->window)
 
   cookie = xcb_get_window_attributes(conn, e->window);
   wa = xcb_get_window_attributes_reply(conn, cookie, NULL);
@@ -623,6 +645,7 @@ void on_configure_request(xcb_generic_event_t *ge)
   xcb_configure_request_event_t *e = (xcb_configure_request_event_t *)ge;
   client_t *c;
   int x, y, w, h;
+  LOGV("on_configure_request: %d", e->window)
 
   if ((c = tab_to_cln(e->window)) && c->isfloating) {
     xassert(e->window == c->tab[c->ft], "configured window is not focus tab");
@@ -650,6 +673,7 @@ void on_configure_request(xcb_generic_event_t *ge)
 void on_property_notify(xcb_generic_event_t *ge)
 {
   xcb_property_notify_event_t *e = (xcb_property_notify_event_t *)ge;
+  LOGV("on_property_notify: %d @ %d", e->window, e->sequence)
 
   if (e->window == root && e->atom == XCB_ATOM_WM_NAME) {
     get_text_prop(root, XCB_ATOM_WM_NAME, root_name, VXWM_ROOT_NAME_BUF);
@@ -903,11 +927,11 @@ void cln_set_focus(client_t *c)
 
   // assign new focus client or loose focus
   if ((fc = c)) {
-    cln_raise(fc); // TODO: raise_on_focus option
+    cln_raise(fc);
     xcb_change_window_attributes(conn, fc->frame, XCB_CW_BORDER_PIXEL, &fclr);
     win_focus(fc->tab[fc->ft]);
     tab_draw(fc);
-    LOGI("new focus: %d\n", fc->frame)
+    LOGI("new focus: %d (%d)\n", fc->tab[fc->ft], fc->frame)
   } else {
     win_focus(root);
     LOGI("loosing focus\n")
@@ -961,6 +985,7 @@ void tab_attach(client_t *c, xcb_window_t win)
   xcb_reparent_window(conn, win, c->frame, 0, VXWM_TAB_HEIGHT);
   vals[0] = VXWM_WIN_EVENT_MASK;
   xcb_change_window_attributes(conn, win, XCB_CW_EVENT_MASK, vals);
+  LOGV("attached %d under frame %d\n", win, c->frame)
 }
 
 void tab_detach(client_t *c, xcb_window_t win)
