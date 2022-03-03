@@ -784,12 +784,14 @@ void bar_draw(monitor_t *m)
   pad = 8;
   tw += pad;
   draw_text(x, 0, tw, VXWM_BAR_H, m->lt_status, fg, pad / 2);
-  x += tw;
 
   // draw root window title
   draw_text_extents(root_name, &tw, NULL);
   tw += pad;
-  draw_text(scr->width_in_pixels - tw, 0, tw, VXWM_BAR_H, root_name, fg, pad / 2);
+  x = scr->width_in_pixels - tw;
+  draw_rect_filled(x, 0, tw, VXWM_BAR_H, fg);
+  draw_arc_filled(x, VXWM_BAR_H/2, VXWM_BAR_H/2., 90, 270, fg);
+  draw_text(x, 0, tw, VXWM_BAR_H, root_name, bg, pad / 2);
 
   draw_copy(m->barwin, 0, 0, scr->width_in_pixels, VXWM_BAR_H);
 }

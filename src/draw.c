@@ -5,9 +5,11 @@
 #include "util.h"
 #include "global.h"
 
-#define R256(color)     ((color >> 16) & 255)
-#define G256(color)     ((color >> 8) & 255)
+#define M_PI            3.14159265358979323846
+#define R256(color)     (color >> 16 & 255)
+#define G256(color)     (color >> 8 & 255)
 #define B256(color)     (color & 255)
+#define D2R(deg)        (deg * M_PI / 180)
 
 static xcb_visualtype_t *get_visual_type(xcb_screen_t *scr);
 static void draw_set_color(color_t clr);
@@ -22,9 +24,9 @@ static double font_height, font_descent;
 
 xcb_visualtype_t *get_visual_type(xcb_screen_t *scr)
 {
-	xcb_depth_iterator_t di;
-	xcb_visualtype_iterator_t vi;
-	xcb_visualtype_t *vt = NULL;
+  xcb_depth_iterator_t di;
+  xcb_visualtype_iterator_t vi;
+  xcb_visualtype_t *vt = NULL;
 
   di = xcb_screen_allowed_depths_iterator(scr);
   for (; !vt && di.rem; xcb_depth_next(&di)) {
@@ -111,6 +113,15 @@ void draw_rect_filled(int x, int y, int w, int h, color_t clr)
   cairo_fill(cr);
 }
 
+void draw_arc_filled(int x, int y, double r, double deg1, double deg2, color_t clr)
+{
+  draw_set_color(clr);
+  cairo_move_to(cr, x, y);
+  cairo_arc(cr, x, y, r, D2R(deg1), D2R(deg2));
+  cairo_close_path(cr);
+  cairo_fill(cr);
+}
+
 void draw_text_extents(const char *text, int *tw, int *th)
 {
   cairo_text_extents_t te;
@@ -122,7 +133,8 @@ void draw_text_extents(const char *text, int *tw, int *th)
     *th = te.height;
 }
 
-void draw_text(int x, int y, int w, int h, const char *text, color_t clr, int lpad)
+// TODO: use parameter w
+void draw_text(int x, int y, UNUSED int w, int h, const char *text, color_t clr, int lpad)
 {
   if (strlen(text) == 0)
     return;
