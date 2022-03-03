@@ -581,7 +581,9 @@ void on_expose(xcb_generic_event_t *ge)
   xcb_expose_event_t *e = (xcb_expose_event_t *)ge;
   client_t *c = frame_to_cln(e->window);
 
-  if (c)
+  if (e->window == fm->barwin)
+    bar_draw(fm);
+  else if ((c = frame_to_cln(e->window)))
     tab_draw(c);
 }
 
