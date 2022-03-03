@@ -161,6 +161,7 @@ static client_t *next_tiled(client_t *);
 static client_t *next_selected(client_t *);
 static client_t *tab_to_cln(xcb_window_t);
 static client_t *frame_to_cln(xcb_window_t);
+static client_t *cln_focus_fallback(client_t *);
 // bindings
 static void bn_quit(const arg_t *);
 static void bn_spawn(const arg_t *);
@@ -861,9 +862,7 @@ void cln_unmanage(client_t *c)
   xassert(c->nt == 0, "should not unmanage client with existing tabs");
   client_t *fb;
 
-  // determine focus fallback
-  if (!(fb = next_inpage(c->next)))
-    fb = prev_inpage(c);
+  fb = cln_focus_fallback(c);
   cln_detach(c);
   cln_delete(c);
   cln_set_focus(fb);
@@ -1092,17 +1091,19 @@ void cln_show_hide(monitor_t *m)
 void cln_set_tag(client_t *c, uint32_t tag, bool toggle)
 {
   xassert(c && tag, "bad call to cln_set_tag");
+  client_t *fb;
 
   if (toggle && (tag ^= c->tag) == 0)
     return;
   c->tag = tag;
+  fb = cln_focus_fallback(c);
   if (!INPAGE(c)) {
     if (c->sel) {
       c->sel = 0;
       ns--;
     }
     cln_show_hide(fm);
-    cln_set_focus(NULL);
+    cln_set_focus(fb);
     mon_arrange(fm);
   }
 }
@@ -1152,6 +1153,15 @@ client_t *frame_to_cln(xcb_window_t frame)
     if (c->frame == frame)
       return c;
   return NULL;
+}
+
+client_t *cln_focus_fallback(client_t *c)
+{
+  client_t *fb;
+
+  if (!(fb = next_inpage(c->next)))
+    fb = prev_inpage(c);
+  return fb;
 }
 
 void bn_quit(UNUSED const arg_t *arg)
