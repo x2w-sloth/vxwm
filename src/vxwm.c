@@ -1078,8 +1078,12 @@ void cln_show_hide(monitor_t *m)
   for (c = m->cln; c; c = c->next)
     if (INPAGE(c))
       cln_move_resize(c, c->x, c->y, c->w, c->h);
-    else
-      cln_move(c, scr->width_in_pixels, 0);
+    else {
+      masks = XCB_CONFIG_WINDOW_X | XCB_CONFIG_WINDOW_Y;
+      vals[0] = scr->width_in_pixels;
+      vals[1] = 0;
+      xcb_configure_window(conn, c->frame, masks, vals);
+    }
 }
 
 void cln_set_tag(client_t *c, uint32_t tag, bool toggle)
