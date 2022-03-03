@@ -566,7 +566,10 @@ void on_focus_in(xcb_generic_event_t *ge)
   xcb_focus_in_event_t *e = (xcb_focus_in_event_t *)ge;
   client_t *c;
 
+  // we are only interested in mode Normal and WhileGrabbed
   if (e->mode == XCB_NOTIFY_MODE_GRAB || e->mode == XCB_NOTIFY_MODE_UNGRAB)
+    return;
+  if (e->detail == XCB_NOTIFY_DETAIL_POINTER)
     return;
   LOGV("on_focus_in: %d @ %d\n", e->event, e->sequence)
 
