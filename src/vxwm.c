@@ -1467,12 +1467,13 @@ void bn_focus_cln(const arg_t *arg)
 void bn_focus_tab(const arg_t *arg)
 {
   pos_t p = arg->p;
-  xcb_window_t win;
+  xcb_window_t win, old;
   int n;
 
   if (!fc)
     return;
 
+  old = fc->tab[fc->ft];
   n = fc->nt;
   switch (p) {
     case First:
@@ -1490,6 +1491,14 @@ void bn_focus_tab(const arg_t *arg)
       break;
   }
   win = fc->tab[fc->ft];
+
+  // since ICCCM does not explicitly define what "IconicState" is,
+  // vxwm considers tabs that are not focused to be "Iconic" since
+  // these tab windows are unviewable but not withdrawn either.
+  if (win != old) {
+    win_set_state(old, XCB_ICCCM_WM_STATE_ICONIC);
+    win_set_state(win, XCB_ICCCM_WM_STATE_NORMAL);
+  }
 
   // resize tab window to match client dimensions
   masks = XCB_CONFIG_WINDOW_WIDTH | XCB_CONFIG_WINDOW_HEIGHT;
