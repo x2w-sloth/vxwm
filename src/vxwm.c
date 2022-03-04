@@ -257,7 +257,7 @@ void setup(void)
   handler[XCB_KEY_PRESS]       = on_key_press;
   handler[XCB_BUTTON_PRESS]    = on_button_press;
   handler[XCB_MOTION_NOTIFY]   = on_motion_notify;
-//handler[XCB_ENTER_NOTIFY]    = on_enter_notify;
+  handler[XCB_ENTER_NOTIFY]    = on_enter_notify;
   handler[XCB_FOCUS_IN]        = on_focus_in;
   handler[XCB_EXPOSE]          = on_expose;
   handler[XCB_DESTROY_NOTIFY]  = on_destroy_notify;
@@ -549,7 +549,6 @@ void on_motion_notify(xcb_generic_event_t *ge)
   xcb_flush(conn);
 }
 
-UNUSED
 void on_enter_notify(xcb_generic_event_t *ge)
 {
   xcb_enter_notify_event_t *e = (xcb_enter_notify_event_t *)ge;
@@ -557,6 +556,8 @@ void on_enter_notify(xcb_generic_event_t *ge)
 
   if (e->mode != XCB_NOTIFY_MODE_NORMAL || e->detail == XCB_NOTIFY_DETAIL_INFERIOR)
     return;
+  LOGV("on_enter_notify: %d, %d @ %d\n", e->event, e->detail, e->sequence)
+
   if ((c = frame_to_cln(e->event)))
     cln_set_focus(c);
   xcb_flush(conn);
@@ -733,9 +734,6 @@ void mon_arrange(monitor_t *m)
   arg.par = pages[m->fp].par;
   arg.ntiled = 0;
   for (c = next_inpage(m->cln); c; c = next_inpage(c->next)) {
-    // if no client has focus, focus the first one in page
-    if (!fc)
-      cln_set_focus(c);
     // due to the tagging mechanism, there can be multiple clients in the same page
     // that wishes fullscreen, only the first one is granted fullscreen and focus
     if (c->isfullscr) {
@@ -1232,7 +1230,7 @@ void bn_swap_tab(const arg_t *arg)
 
 void bn_swap_cln(const arg_t *arg)
 {
-  client_t *p = NULL, *c = next_tiled(fm->cln);
+  client_t *p = NULL, *c = next_tiled(fm->cln), *pf;
 
   if (!fc || fc->isfloating || !next_tiled(c->next))
     return;
@@ -1279,7 +1277,11 @@ void bn_swap_cln(const arg_t *arg)
     fc->next = fm->cln;
     fm->cln = fc;
   }
+  // loose focus breifly so that enter notify does not steal focus after arrange
+  pf = fc;
+  cln_set_focus(NULL);
   mon_arrange(fm);
+  cln_set_focus(pf);
 }
 
 void bn_move_cln(UNUSED const arg_t *arg)
@@ -1333,7 +1335,7 @@ void bn_merge_cln(const arg_t *arg)
 
   // maximum tab count is capped at 64
   if (!fc || nsel == 0 || fc->nt + nsel > 64) {
-    LOGW("merging will result in client %d hosting over 64 tabs\n", c->frame)
+    LOGW("merging will result in client %d hosting over 64 tabs\n", fc->frame)
     return;
   }
 
