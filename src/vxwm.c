@@ -633,6 +633,9 @@ void on_unmap_notify(xcb_generic_event_t *ge)
 
   if ((c = tab_to_cln(e->window))) {
     tab_detach(c, e->window);
+    win_set_state(e->window, XCB_ICCCM_WM_STATE_WITHDRAWN);
+    xcb_change_save_set(conn, XCB_SET_MODE_DELETE, e->window);
+    LOGI("window %d deleted from save set\n", e->window)
     if (c->nt == 0)
       cln_unmanage(c);
     else
@@ -846,6 +849,9 @@ void cln_manage(xcb_window_t win)
 {
   client_t *c;
   xcb_atom_t win_type;
+
+  xcb_change_save_set(conn, XCB_SET_MODE_INSERT, win);
+  LOGI("window %d added to save set\n", win)
 
   c = cln_create();
   tab_attach(c, win);
