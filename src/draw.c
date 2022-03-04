@@ -127,7 +127,7 @@ void draw_text_extents(const char *text, int *tw, int *th)
   cairo_text_extents_t te;
 
   cairo_text_extents(cr, text, &te);
-  if (tw) // slighter larger than actual glyph width
+  if (tw) // slightly larger than actual glyph width
     *tw = te.x_advance;
   if (th)
     *th = te.height;

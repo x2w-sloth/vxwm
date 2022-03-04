@@ -1299,7 +1299,7 @@ void bn_swap_cln(const arg_t *arg)
     fc->next = fm->cln;
     fm->cln = fc;
   }
-  // loose focus breifly so that enter notify does not steal focus after arrange
+  // loose focus briefly so that enter notify does not steal focus after arrange
   pf = fc;
   cln_set_focus(NULL);
   mon_arrange(fm);
