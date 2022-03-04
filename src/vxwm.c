@@ -91,6 +91,7 @@ enum {
   WmProtocols = 0,
   WmTakeFocus,
   WmDeleteWindow,
+  WmState,
   WmAtomsLast,
 };
 
@@ -110,12 +111,13 @@ static xcb_keycode_t *keysym_to_keycodes(xcb_keysym_t);
 static xcb_keysym_t keycode_to_keysym(xcb_keycode_t);
 static void grab_keys(void);
 static void ptr_motion(ptr_state_t);
-static bool has_proto(xcb_window_t, xcb_atom_t);
-static void send_msg(xcb_window_t, xcb_atom_t);
 static xcb_atom_t get_atom_prop(xcb_window_t, xcb_atom_t);
 static bool get_text_prop(xcb_window_t, xcb_atom_t, char *, size_t);
 static void win_stack(xcb_window_t, pos_t);
 static void win_focus(xcb_window_t);
+static void win_set_state(xcb_window_t, uint32_t);
+static bool win_has_proto(xcb_window_t, xcb_atom_t);
+static void win_send_proto(xcb_window_t, xcb_atom_t);
 static void grant_configure_request(xcb_configure_request_event_t *);
 // event handlers
 static void on_key_press(xcb_generic_event_t *);
@@ -317,6 +319,7 @@ void atom_setup(void)
   wm_cookies[WmProtocols]    = ATOM("WM_PROTOCOLS");
   wm_cookies[WmTakeFocus]    = ATOM("WM_TAKE_FOCUS");
   wm_cookies[WmDeleteWindow] = ATOM("WM_DELETE_WINDOW");
+  wm_cookies[WmState]        = ATOM("WM_STATE");
   net_cookies[NetWmName]     = ATOM("_NET_WM_NAME");
   net_cookies[NetWmWindowType] = ATOM("_NET_WM_WINDOW_TYPE");
   net_cookies[NetWmWindowTypeDialog] = ATOM("_NET_WM_WINDOW_TYPE_DIALOG");
@@ -386,36 +389,6 @@ void ptr_motion(ptr_state_t state)
   ptr_state = state; // see on_motion_notify
 }
 
-bool has_proto(xcb_window_t win, xcb_atom_t proto)
-{
-  xcb_icccm_get_wm_protocols_reply_t reply;
-  xcb_get_property_cookie_t cookie;
-  int i, n;
-
-  cookie = xcb_icccm_get_wm_protocols_unchecked(conn, win, wm_atom[WmProtocols]);
-  if (!xcb_icccm_get_wm_protocols_reply(conn, cookie, &reply, NULL)) {
-    LOGW("failed to retrieve wm protocols for %d\n", win)
-    return false;
-  }
-
-  for (i = 0, n = reply.atoms_len; i < n && reply.atoms[i] != proto; i++) ;
-  xcb_icccm_get_wm_protocols_reply_wipe(&reply);
-  return i != n;
-}
-
-void send_msg(xcb_window_t win, xcb_atom_t proto)
-{
-  xcb_client_message_event_t msg;
-
-  msg.response_type = XCB_CLIENT_MESSAGE;
-  msg.format = 32;
-  msg.window = win;
-  msg.type = wm_atom[WmProtocols];
-  msg.data.data32[0] = proto;
-  msg.data.data32[1] = XCB_TIME_CURRENT_TIME;
-  xcb_send_event(conn, false, win, XCB_EVENT_MASK_NO_EVENT, (const char *)&msg);
-}
-
 xcb_atom_t get_atom_prop(xcb_window_t win, xcb_atom_t prop)
 {
   xcb_get_property_reply_t *reply;
@@ -457,11 +430,53 @@ void win_stack(xcb_window_t win, pos_t p)
   xcb_configure_window(conn, win, masks, vals);
 }
 
+/// Sets the input focus window.
+/// If the window supports WM_TAKE_FOCUS protocol, send a client message to it.
 void win_focus(xcb_window_t win)
 {
-  if (win != root && has_proto(win, wm_atom[WmTakeFocus]))
-    send_msg(win, wm_atom[WmTakeFocus]);
+  if (win != root && win_has_proto(win, wm_atom[WmTakeFocus]))
+    win_send_proto(win, wm_atom[WmTakeFocus]);
   xcb_set_input_focus(conn, XCB_INPUT_FOCUS_POINTER_ROOT, win, XCB_CURRENT_TIME);
+}
+
+/// Sets the WM_STATE property of a window.
+void win_set_state(xcb_window_t win, uint32_t state)
+{
+  uint32_t data[] = { state, XCB_NONE };
+  xcb_change_property(conn, XCB_PROP_MODE_REPLACE, win,
+                      wm_atom[WmState], XCB_ATOM_ATOM, 32, 2, data);
+}
+
+/// Queries if a window has a certain WM_PROTOCOL property.
+bool win_has_proto(xcb_window_t win, xcb_atom_t proto)
+{
+  xcb_icccm_get_wm_protocols_reply_t reply;
+  xcb_get_property_cookie_t cookie;
+  int i, n;
+
+  cookie = xcb_icccm_get_wm_protocols_unchecked(conn, win, wm_atom[WmProtocols]);
+  if (!xcb_icccm_get_wm_protocols_reply(conn, cookie, &reply, NULL)) {
+    LOGW("failed to retrieve wm protocols for %d\n", win)
+    return false;
+  }
+
+  for (i = 0, n = reply.atoms_len; i < n && reply.atoms[i] != proto; i++) ;
+  xcb_icccm_get_wm_protocols_reply_wipe(&reply);
+  return i != n;
+}
+
+/// Sends a WM_PROTOCOL client message to a window.
+void win_send_proto(xcb_window_t win, xcb_atom_t proto)
+{
+  xcb_client_message_event_t msg;
+
+  msg.response_type = XCB_CLIENT_MESSAGE;
+  msg.format = 32;
+  msg.window = win;
+  msg.type = wm_atom[WmProtocols];
+  msg.data.data32[0] = proto;
+  msg.data.data32[1] = XCB_TIME_CURRENT_TIME;
+  xcb_send_event(conn, false, win, XCB_EVENT_MASK_NO_EVENT, (const char *)&msg);
 }
 
 void grant_configure_request(xcb_configure_request_event_t *e)
@@ -840,6 +855,7 @@ void cln_manage(xcb_window_t win)
   if (win_type == net_atom[NetWmWindowTypeDialog])
     c->isfloating = true;
 
+  win_set_state(win, XCB_ICCCM_WM_STATE_NORMAL);
   mon_arrange(fm);
   xcb_map_window(conn, win);
   cln_set_focus(c);
@@ -1034,8 +1050,8 @@ void tab_draw(client_t *c)
 
 void tab_kill(xcb_window_t win)
 {
-  if (has_proto(win, wm_atom[WmDeleteWindow]))
-    send_msg(win, wm_atom[WmDeleteWindow]);
+  if (win_has_proto(win, wm_atom[WmDeleteWindow]))
+    win_send_proto(win, wm_atom[WmDeleteWindow]);
   else
     xcb_kill_client(conn, win);
 }
