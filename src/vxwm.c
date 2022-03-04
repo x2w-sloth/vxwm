@@ -197,7 +197,7 @@ static bool ptr_first_motion;
 static bool running;
 static int ptr_x, ptr_y;
 static int win_x, win_y, win_w, win_h;
-static int ns;
+static int nsel;
 static uint32_t vals[8], masks;
 static char root_name[VXWM_ROOT_NAME_BUF];
 xcb_connection_t *conn;
@@ -272,7 +272,7 @@ void setup(void)
   strncpy(root_name, "vxwm "VXWM_VERSION, VXWM_ROOT_NAME_BUF);
   ptr_state = PtrUngrabbed;
   fc = NULL;
-  ns = 0;
+  nsel = 0;
   running = true;
 }
 
@@ -1007,7 +1007,7 @@ void tab_detach(client_t *c, xcb_window_t win)
 
   // preserve selection mask
   if (c->sel & LSB(i))
-    ns--;
+    nsel--;
   lsb_mask = LSB(i) - 1;
   c->sel = ((c->sel >> 1) & ~lsb_mask) + (c->sel & lsb_mask);
 
@@ -1100,7 +1100,7 @@ void cln_set_tag(client_t *c, uint32_t tag, bool toggle)
   if (!INPAGE(c)) {
     if (c->sel) {
       c->sel = 0;
-      ns--;
+      nsel--;
     }
     cln_show_hide(fm);
     cln_set_focus(fb);
@@ -1190,7 +1190,7 @@ void bn_kill_tab(UNUSED const arg_t *arg)
   if (!fc)
     return;
 
-  if (ns > 0) { // consume selection
+  if (nsel > 0) { // consume selection
     for (c = next_selected(fm->cln); c; c = next_selected(c->next))
       for (i = 0; i < c->nt; i++) if (c->sel & LSB(i))
         tab_kill(c->tab[i]);
@@ -1298,7 +1298,7 @@ void bn_toggle_select(UNUSED const arg_t *arg)
     return;
 
   fc->sel ^= LSB(fc->ft);
-  ns += (fc->sel & LSB(fc->ft)) ? +1 : -1;
+  nsel += (fc->sel & LSB(fc->ft)) ? +1 : -1;
   tab_draw(fc);
   xcb_flush(conn);
 }
@@ -1332,8 +1332,10 @@ void bn_merge_cln(const arg_t *arg)
   int i;
 
   // maximum tab count is capped at 64
-  if (!fc || ns == 0 || fc->nt + ns > 64)
+  if (!fc || nsel == 0 || fc->nt + nsel > 64) {
+    LOGW("merging will result in client %d hosting over 64 tabs\n", c->frame)
     return;
+  }
 
   // determine merge destination
   switch (arg->p) {
@@ -1364,7 +1366,7 @@ void bn_merge_cln(const arg_t *arg)
       c = next_selected(c->next);
     }
   }
-  xassert(ns == 0, "bad selection counting");
+  xassert(nsel == 0, "bad selection counting");
   win_stack(mc->tab[mc->ft], Top);
   cln_set_focus(mc);
   mon_arrange(fm);
@@ -1376,10 +1378,10 @@ void bn_split_cln(UNUSED const arg_t *arg)
   xcb_window_t win;
   int i;
 
-  if (!fc || (ns == 0 && fc->nt == 1))
+  if (!fc || (nsel == 0 && fc->nt == 1))
     return;
 
-  if (ns == 0) { // split focus tab from focus client
+  if (nsel == 0) { // split focus tab from focus client
     sc = cln_create();
     cln_attach(sc);
     win = fc->tab[fc->ft];
@@ -1388,7 +1390,7 @@ void bn_split_cln(UNUSED const arg_t *arg)
   } else for (c = next_selected(fm->cln); c; c = next_selected(c->next))
     while (c->sel) { // consume selection
       if (c->nt == 1) {
-        ns--;
+        nsel--;
         c->sel = 0;
         break;
       }
@@ -1399,7 +1401,7 @@ void bn_split_cln(UNUSED const arg_t *arg)
       tab_detach(c, win);
       tab_attach(sc, win);
     }
-  xassert(ns == 0, "bad selection counting");
+  xassert(nsel == 0, "bad selection counting");
   cln_set_focus(sc ? sc : fc);
   mon_arrange(fm);
 }
@@ -1490,7 +1492,7 @@ void bn_focus_page(const arg_t *arg)
   // lose selection when switching pages
   for (c = next_inpage(fm->cln); c; c = next_inpage(c->next))
     c->sel = 0;
-  ns = 0;
+  nsel = 0;
 
   LOGI("focus page %s\n", pages[arg->i].sym)
   fm->fp = arg->i;
