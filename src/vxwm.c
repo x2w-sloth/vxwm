@@ -192,7 +192,6 @@ static void stack(const layout_arg_t *);
 static xcb_key_symbols_t *symbols;
 static xcb_atom_t wm_atom[WmAtomsLast];
 static xcb_atom_t net_atom[NetAtomsLast];
-static handler_t handler[XCB_NO_OPERATION];
 static monitor_t *fm;
 static client_t *fc;
 static ptr_state_t ptr_state;
@@ -203,6 +202,21 @@ static int win_x, win_y, win_w, win_h;
 static int nsel;
 static uint32_t vals[8], masks;
 static char root_name[VXWM_ROOT_NAME_BUF];
+static const handler_t handler[XCB_NO_OPERATION] = {
+  [XCB_KEY_PRESS] = on_key_press,
+  [XCB_BUTTON_PRESS] = on_button_press,
+  [XCB_MOTION_NOTIFY] = on_motion_notify,
+  [XCB_ENTER_NOTIFY] = on_enter_notify,
+  [XCB_FOCUS_IN] = on_focus_in,
+  [XCB_EXPOSE] = on_expose,
+  [XCB_DESTROY_NOTIFY] = on_destroy_notify,
+  [XCB_UNMAP_NOTIFY] = on_unmap_notify,
+  [XCB_MAP_REQUEST] = on_map_request,
+  [XCB_CONFIGURE_REQUEST] = on_configure_request,
+  [XCB_PROPERTY_NOTIFY] = on_property_notify,
+//[XCB_CLIENT_MESSAGE]  = on_client_message,
+//[XCB_MAPPING_NOTIFY]  = on_mapping_notify,
+};
 xcb_connection_t *conn;
 xcb_screen_t *scr;
 xcb_window_t root;
@@ -255,21 +269,6 @@ void setup(void)
     die("failed to allocate key symbol table\n");
   grab_keys();
   xcb_flush(conn);
-
-  // install event handlers
-  handler[XCB_KEY_PRESS]       = on_key_press;
-  handler[XCB_BUTTON_PRESS]    = on_button_press;
-  handler[XCB_MOTION_NOTIFY]   = on_motion_notify;
-  handler[XCB_ENTER_NOTIFY]    = on_enter_notify;
-  handler[XCB_FOCUS_IN]        = on_focus_in;
-  handler[XCB_EXPOSE]          = on_expose;
-  handler[XCB_DESTROY_NOTIFY]  = on_destroy_notify;
-  handler[XCB_UNMAP_NOTIFY]    = on_unmap_notify;
-  handler[XCB_MAP_REQUEST]     = on_map_request;
-  handler[XCB_CONFIGURE_REQUEST] = on_configure_request;
-  handler[XCB_PROPERTY_NOTIFY] = on_property_notify;
-//handler[XCB_CLIENT_MESSAGE]  = on_client_message;
-//handler[XCB_MAPPING_NOTIFY]  = on_mapping_notify;
 
   // initialize status globals
   strncpy(root_name, "vxwm "VXWM_VERSION, VXWM_ROOT_NAME_BUF);
