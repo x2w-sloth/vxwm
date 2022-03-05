@@ -538,7 +538,7 @@ void on_button_press(xcb_generic_event_t *ge)
 {
   xcb_button_press_event_t *e = (xcb_button_press_event_t *)ge;
   int i, n;
-  LOGV("on_button_press: %d @ %d", e->event, e->sequence)
+  LOGV("on_button_press: %d @ %d\n", e->event, e->sequence)
 
   cln_set_focus(frame_to_cln(e->event));
   for (i = 0, n = LENGTH(btnbinds); i < n; i++)
@@ -677,7 +677,7 @@ void on_configure_request(xcb_generic_event_t *ge)
   xcb_configure_request_event_t *e = (xcb_configure_request_event_t *)ge;
   client_t *c;
   int x, y, w, h;
-  LOGV("on_configure_request: %d", e->window)
+  LOGV("on_configure_request: %d\n", e->window)
 
   if ((c = tab_to_cln(e->window)) && c->isfloating) {
     xassert(e->window == c->tab[c->ft], "configured window is not focus tab");
@@ -1109,13 +1109,17 @@ void cln_show_hide(monitor_t *m)
 
 void cln_set_tag(client_t *c, uint32_t tag, bool toggle)
 {
-  xassert(c && tag, "bad call to cln_set_tag");
+  xassert(c, "bad call to cln_set_tag");
   client_t *fb;
 
-  if (toggle && (tag ^= c->tag) == 0)
+  if (toggle)
+    tag ^= c->tag;
+  if (tag == 0) {
+    LOGW("ignoring request to set client tag to 0\n")
     return;
-  c->tag = tag;
+  }
   fb = cln_focus_fallback(c);
+  c->tag = tag;
   if (!INPAGE(c)) {
     if (c->sel) {
       c->sel = 0;
