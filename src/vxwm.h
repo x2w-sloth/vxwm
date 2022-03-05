@@ -22,5 +22,11 @@ typedef void (*layout_t)(const layout_arg_t *);
 typedef void (*handler_t)(xcb_generic_event_t *);
 typedef union { int i; uint32_t u32; pos_t p; layout_t lt; const void *v; } arg_t;
 typedef void (*bind_t)(const arg_t *);
+typedef struct session {
+	xcb_connection_t *conn;
+	xcb_screen_t *scr;
+	xcb_window_t root;
+} session_t;
+extern session_t sn;
 
 #endif // VXWM_H

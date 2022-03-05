@@ -3,7 +3,7 @@
 #include <cairo/cairo-xcb.h>
 #include "draw.h"
 #include "util.h"
-#include "global.h"
+#include "vxwm.h"
 
 #define M_PI            3.14159265358979323846
 #define R256(color)     (color >> 16 & 255)
@@ -58,20 +58,20 @@ void draw_set_line_width(double lw)
 
 void draw_setup(void)
 {
-  uint32_t scrw = scr->width_in_pixels, scrh = scr->height_in_pixels;
+  uint32_t scrw = sn.scr->width_in_pixels, scrh = sn.scr->height_in_pixels;
   uint32_t val = 0;
   xcb_visualtype_t *vt;
   cairo_font_extents_t fe;
 
   // setup xcb graphics context and pixmap buffer
-  gc = xcb_generate_id(conn);
-  xcb_create_gc(conn, gc, root, XCB_GC_GRAPHICS_EXPOSURES, &val);
-  pixmap = xcb_generate_id(conn);
-  xcb_create_pixmap(conn, scr->root_depth, pixmap, root, scrw, scrh);
+  gc = xcb_generate_id(sn.conn);
+  xcb_create_gc(sn.conn, gc, sn.root, XCB_GC_GRAPHICS_EXPOSURES, &val);
+  pixmap = xcb_generate_id(sn.conn);
+  xcb_create_pixmap(sn.conn, sn.scr->root_depth, pixmap, sn.root, scrw, scrh);
 
   // create cairo surface and context
-  vt = get_visual_type(scr);
-  surface = cairo_xcb_surface_create(conn, pixmap, vt, scrw, scrh);
+  vt = get_visual_type(sn.scr);
+  surface = cairo_xcb_surface_create(sn.conn, pixmap, vt, scrw, scrh);
   if (cairo_surface_status(surface) != CAIRO_STATUS_SUCCESS)
     die("failed to allocate surface on pixmap");
   cr = cairo_create(surface);
@@ -88,14 +88,14 @@ void draw_cleanup(void)
 {
   cairo_destroy(cr);
   cairo_surface_destroy(surface);
-  xcb_free_pixmap(conn, pixmap);
-  xcb_free_gc(conn, gc);
+  xcb_free_pixmap(sn.conn, pixmap);
+  xcb_free_gc(sn.conn, gc);
 }
 
 void draw_copy(xcb_drawable_t dst, int x, int y, int w, int h)
 {
-  xcb_copy_area(conn, pixmap, dst, gc, x, y, x, y, w, h);
-  xcb_flush(conn);
+  xcb_copy_area(sn.conn, pixmap, dst, gc, x, y, x, y, w, h);
+  xcb_flush(sn.conn);
 }
 
 void draw_rect(int x, int y, int w, int h, color_t clr, double lw)
