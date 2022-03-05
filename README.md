@@ -1,24 +1,22 @@
-vxwm is a non-compositing tiling window manager for the X window system.
+## About
+vxwm is a non-compositing tiling window manager for the X window system. It aims to be highly customizable and extensible while providing diverse options for different users.
 
-It aims to be highly customizable and extensible while providing diverse options for different users.
+## Default Bindings
 
-## Configuration
+The default mod key is the windows key, below are some core key bindings to get started.
 
-Settings can be found and customized in `src/config.h`.
-
-By default the Mod key is the windows key, below are some core key bindings.
-
-- Mod + Ctrl + q : quits the window manager.
-- Mod + Enter : spawns a terminal, by default this is [st](https://git.suckless.org/st/) from suckless.org
-- Mod + q : kills a tab, a vxwm client consists of one or more tabs.
-- Mod + h : focus previous tab in current client.
-- Mod + l : focus next tab in current client.
-- Mod + k : focus previous client.
-- Mod + j : focus next client.
-- Mod + s : toggle-selects a tab in a client.
-- Mod + m : selected tabs are merged into the focus client.
-- Mod + , : selected tabs are splitted into individual clients.
-
+| Key Bind | Function |
+| -------- | -------- |
+| mod + enter | spawns a terminal, by default this is [st](https://git.suckless.org/st/) from suckless.org |
+| mod + q | kills a tab, a vxwm client consists of one or more tabs. |
+| mod + k | focus previous client. |
+| mod + j | focus next client. |
+| mod + h | focus previous tab in current client. |
+| mod + l | focus next tab in current client. |
+| mod + s | toggle-selects a tab in a client. |
+| mod + m | selected tabs are merged into the current client. |
+| mod + , | selected tabs are splitted into individual clients. |
+| mod + ctrl + q | quits the window manager |
 
 ## Installation
 
@@ -31,6 +29,12 @@ sudo make install
 ```
 
 For people using `startx`, simply add `exec vxwm` to the end of `~/.xinitrc`.
+
+## Configuration
+
+Settings can be found and customized in `src/config.h`.
+
+For the new config to take effect please recompile and install with `make install` again.
 
 ## Disclaimer
 
