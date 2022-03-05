@@ -862,9 +862,9 @@ void cln_manage(xcb_window_t win)
   if (win_type == net_atom[NetWmWindowTypeDialog])
     c->isfloating = true;
 
+  xcb_map_window(conn, win);
   win_set_state(win, XCB_ICCCM_WM_STATE_NORMAL);
   mon_arrange(fm);
-  xcb_map_window(conn, win);
   cln_set_focus(c);
 }
 
@@ -886,8 +886,8 @@ void cln_unmanage(client_t *c)
   fb = cln_focus_fallback(c);
   cln_detach(c);
   cln_delete(c);
-  cln_set_focus(fb);
   mon_arrange(fm);
+  cln_set_focus(fb);
 }
 
 void cln_set_border(client_t *c, int width)
@@ -1124,8 +1124,8 @@ void cln_set_tag(client_t *c, uint32_t tag, bool toggle)
       nsel--;
     }
     cln_show_hide(fm);
-    cln_set_focus(fb);
     mon_arrange(fm);
+    cln_set_focus(fb);
   }
 }
 
