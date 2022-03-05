@@ -112,13 +112,14 @@ static xcb_keycode_t *keysym_to_keycodes(xcb_keysym_t);
 static xcb_keysym_t keycode_to_keysym(xcb_keycode_t);
 static void grab_keys(void);
 static void ptr_motion(ptr_state_t);
-static xcb_atom_t get_atom_prop(xcb_window_t, xcb_atom_t);
-static bool get_text_prop(xcb_window_t, xcb_atom_t, char *, size_t);
+static xcb_atom_t win_get_atom_prop(xcb_window_t, xcb_atom_t);
+static bool win_get_text_prop(xcb_window_t, xcb_atom_t, char *, size_t);
 static void win_stack(xcb_window_t, pos_t);
 static void win_focus(xcb_window_t);
 static void win_set_state(xcb_window_t, uint32_t);
 static bool win_has_proto(xcb_window_t, xcb_atom_t);
 static void win_send_proto(xcb_window_t, xcb_atom_t);
+static void win_kill(xcb_window_t);
 static void grant_configure_request(xcb_configure_request_event_t *);
 // event handlers
 static void on_key_press(xcb_generic_event_t *);
@@ -157,7 +158,6 @@ static void cln_set_tag(client_t *, uint32_t, bool);
 static void tab_attach(client_t *, xcb_window_t);
 static void tab_detach(client_t *, xcb_window_t);
 static void tab_draw(client_t *);
-static void tab_kill(xcb_window_t);
 static client_t *next_inpage(client_t *);
 static client_t *prev_inpage(client_t *);
 static client_t *next_tiled(client_t *);
@@ -390,7 +390,7 @@ void ptr_motion(ptr_state_t state)
   ptr_state = state; // see on_motion_notify
 }
 
-xcb_atom_t get_atom_prop(xcb_window_t win, xcb_atom_t prop)
+xcb_atom_t win_get_atom_prop(xcb_window_t win, xcb_atom_t prop)
 {
   xcb_get_property_reply_t *reply;
   xcb_get_property_cookie_t cookie;
@@ -404,7 +404,7 @@ xcb_atom_t get_atom_prop(xcb_window_t win, xcb_atom_t prop)
   return *atom;
 }
 
-bool get_text_prop(xcb_window_t win, xcb_atom_t prop, char *text, size_t tsize)
+bool win_get_text_prop(xcb_window_t win, xcb_atom_t prop, char *text, size_t tsize)
 {
   xcb_get_property_reply_t *reply;
   xcb_get_property_cookie_t cookie;
@@ -445,7 +445,7 @@ void win_set_state(xcb_window_t win, uint32_t state)
 {
   uint32_t data[] = { state, XCB_NONE };
   xcb_change_property(conn, XCB_PROP_MODE_REPLACE, win,
-                      wm_atom[WmState], XCB_ATOM_ATOM, 32, 2, data);
+                      wm_atom[WmState], wm_atom[WmState], 32, 2, data);
 }
 
 /// Queries if a window has a certain WM_PROTOCOL property.
@@ -478,6 +478,16 @@ void win_send_proto(xcb_window_t win, xcb_atom_t proto)
   msg.data.data32[0] = proto;
   msg.data.data32[1] = XCB_TIME_CURRENT_TIME;
   xcb_send_event(conn, false, win, XCB_EVENT_MASK_NO_EVENT, (const char *)&msg);
+}
+
+/// If the window supports WM_DELETE_WINDOW protocol, send a client message to it.
+/// Otherwise kill it directly from our side.
+void win_kill(xcb_window_t win)
+{
+  if (win_has_proto(win, wm_atom[WmDeleteWindow]))
+    win_send_proto(win, wm_atom[WmDeleteWindow]);
+  else
+    xcb_kill_client(conn, win);
 }
 
 void grant_configure_request(xcb_configure_request_event_t *e)
@@ -702,7 +712,7 @@ void on_property_notify(xcb_generic_event_t *ge)
   LOGV("on_property_notify: %d @ %d", e->window, e->sequence)
 
   if (e->window == root && e->atom == XCB_ATOM_WM_NAME) {
-    get_text_prop(root, XCB_ATOM_WM_NAME, root_name, VXWM_ROOT_NAME_BUF);
+    win_get_text_prop(root, XCB_ATOM_WM_NAME, root_name, VXWM_ROOT_NAME_BUF);
     bar_draw(fm);
   }
   xcb_flush(conn);
@@ -858,7 +868,7 @@ void cln_manage(xcb_window_t win)
   tab_attach(c, win);
   cln_attach(c);
 
-  win_type = get_atom_prop(c->tab[c->ft], net_atom[NetWmWindowType]);
+  win_type = win_get_atom_prop(c->tab[c->ft], net_atom[NetWmWindowType]);
   if (win_type == net_atom[NetWmWindowTypeDialog])
     c->isfloating = true;
 
@@ -1000,8 +1010,8 @@ void tab_attach(client_t *c, xcb_window_t win)
   }
 
   c->tab[c->nt] = win;
-  if (!get_text_prop(win, net_atom[NetWmName], c->name[c->nt], VXWM_TAB_NAME_BUF))
-    get_text_prop(win, XCB_ATOM_WM_NAME, c->name[c->nt], VXWM_TAB_NAME_BUF);
+  if (!win_get_text_prop(win, net_atom[NetWmName], c->name[c->nt], VXWM_TAB_NAME_BUF))
+    win_get_text_prop(win, XCB_ATOM_WM_NAME, c->name[c->nt], VXWM_TAB_NAME_BUF);
   c->nt++;
 
   // If the window is already mapped and has the structure notify event mask,
@@ -1053,14 +1063,6 @@ void tab_draw(client_t *c)
     if (c->sel & LSB(i))
       draw_rect_filled((i + 0.25) * tw, sw / 2, tw / 2, sw, VXWM_TAB_SELECT_CLR);
   draw_copy(c->frame, 0, 0, c->w, VXWM_TAB_HEIGHT);
-}
-
-void tab_kill(xcb_window_t win)
-{
-  if (win_has_proto(win, wm_atom[WmDeleteWindow]))
-    win_send_proto(win, wm_atom[WmDeleteWindow]);
-  else
-    xcb_kill_client(conn, win);
 }
 
 void cln_move(client_t *c, int x, int y)
@@ -1214,9 +1216,9 @@ void bn_kill_tab(UNUSED const arg_t *arg)
   if (nsel > 0) { // consume selection
     for (c = next_selected(fm->cln); c; c = next_selected(c->next))
       for (i = 0; i < c->nt; i++) if (c->sel & LSB(i))
-        tab_kill(c->tab[i]);
+        win_kill(c->tab[i]);
   } else
-    tab_kill(fc->tab[fc->ft]);
+    win_kill(fc->tab[fc->ft]);
   xcb_flush(conn);
 }
 
