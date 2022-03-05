@@ -1375,11 +1375,12 @@ void bn_merge_cln(const arg_t *arg)
  
   c = next_selected(fm->cln);
   while (c) {
-    while (c->sel) {
+    while (c->sel) { // consume selection
       for (i = 0; !(c->sel & LSB(i)); i++) ;
       win = c->tab[i];
       tab_detach(c, win);
       tab_attach(mc, win);
+      win_set_state(win, XCB_ICCCM_WM_STATE_ICONIC);
     }
     if (c->nt == 0) {
       d = c;
@@ -1393,6 +1394,7 @@ void bn_merge_cln(const arg_t *arg)
   }
   xassert(nsel == 0, "bad selection counting");
   win_stack(mc->tab[mc->ft], Top);
+  win_set_state(mc->tab[mc->ft], XCB_ICCCM_WM_STATE_NORMAL);
   cln_set_focus(mc);
   mon_arrange(fm);
 }
@@ -1412,7 +1414,8 @@ void bn_split_cln(UNUSED const arg_t *arg)
     win = fc->tab[fc->ft];
     tab_detach(fc, win);
     tab_attach(sc, win);
-  } else for (c = next_selected(fm->cln); c; c = next_selected(c->next))
+    win_set_state(fc->tab[fc->ft], XCB_ICCCM_WM_STATE_NORMAL);
+  } else for (c = next_selected(fm->cln); c; c = next_selected(c->next)) {
     while (c->sel) { // consume selection
       if (c->nt == 1) {
         nsel--;
@@ -1425,7 +1428,10 @@ void bn_split_cln(UNUSED const arg_t *arg)
       win = c->tab[i];
       tab_detach(c, win);
       tab_attach(sc, win);
+      win_set_state(win, XCB_ICCCM_WM_STATE_NORMAL);
     }
+    win_set_state(c->tab[c->ft], XCB_ICCCM_WM_STATE_NORMAL);
+  }
   xassert(nsel == 0, "bad selection counting");
   cln_set_focus(sc ? sc : fc);
   mon_arrange(fm);
