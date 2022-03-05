@@ -17,6 +17,7 @@
 #define VXWM_CLN_MIN_H           30
 #define VXWM_TAB_NAME_BUF        128
 #define VXWM_ROOT_NAME_BUF       128
+#define VXWM_LT_STATUS_BUF       32
 #define BORDER                   2 * VXWM_CLN_BORDER_W
 #define INPAGE(C)                (C->tag & 1 << fm->fp)
 
@@ -38,7 +39,7 @@ struct monitor {
   int np, fp;          // number of pages, index of focus page
   int lx, ly, lw, lh;  // layout space where tiled clients are arranged in
   xcb_window_t barwin; // status bar window
-  char lt_status[32];  // layout status
+  char lt_status[VXWM_LT_STATUS_BUF]; // layout status buffer
 };
 
 // a page displays a subset of clients under a layout policy
@@ -721,7 +722,7 @@ monitor_t *mon_create(void)
   m->lw = scr->width_in_pixels - m->lx;
   m->lh = scr->height_in_pixels - m->ly - VXWM_BAR_H;
   m->barwin = xcb_generate_id(conn);
-  memset(m->lt_status, 0, sizeof(m->lt_status));
+  memset(m->lt_status, 0, VXWM_LT_STATUS_BUF);
 
   masks = XCB_CW_OVERRIDE_REDIRECT | XCB_CW_EVENT_MASK;
   vals[0] = 1;
@@ -770,7 +771,7 @@ void mon_arrange(monitor_t *m)
   }
 
   // the layout may modify page parameters as they see fit
-  memset(m->lt_status, 0, sizeof(m->lt_status));
+  memset(m->lt_status, 0, VXWM_LT_STATUS_BUF);
   if (arg.ntiled > 0)
     pages[m->fp].lt(&arg);
   bar_draw(m);
@@ -1532,6 +1533,8 @@ void bn_focus_page(const arg_t *arg)
   cln_show_hide(fm);
   cln_set_focus(NULL);
   mon_arrange(fm);
+  // TODO: cache the last focused client before switching pages
+  cln_set_focus(next_inpage(fm->cln));
 }
 
 void bn_toggle_tag(const arg_t *arg)
@@ -1577,7 +1580,7 @@ void column(const layout_arg_t *arg)
   colw = m->lw / cols;
   h = m->lh / (n-cols+1);
 
-  snprintf(m->lt_status, 32, "[%d COL]", arg->par[0]);
+  snprintf(m->lt_status, VXWM_LT_STATUS_BUF, "[%d COL]", arg->par[0]);
 
   for (c = next_tiled(arg->mon->cln), i = 0; c; c = next_tiled(c->next), i++)
     if (i < cols - 1)
@@ -1605,7 +1608,7 @@ void stack(const layout_arg_t *arg)
   } else
     lw = rw = m->lw / 2;
 
-  snprintf(m->lt_status, 32, "[%d/%d STK]", arg->par[0], rn);
+  snprintf(m->lt_status, VXWM_LT_STATUS_BUF, "[%d/%d STK]", arg->par[0], rn);
 
   for (c = next_tiled(arg->mon->cln), i = 0; c; c = next_tiled(c->next), i++)
     if (i < ln)
