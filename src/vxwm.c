@@ -1197,11 +1197,14 @@ void bn_spawn(const arg_t *arg)
   char **args = (char **)arg->v;
   pid_t pid = fork();
 
-  if (pid == -1)
-    die("fork failed\n");
-  else if (pid == 0) {
+  if (pid == -1) {
+    LOGW("fork failed\n")
+  } else if (pid == 0) {
+    setsid();
     execvp(*args, args);
-    _exit(EXIT_SUCCESS);
+    fprintf(stderr, "execvp %s ", *args);
+    perror("failed");
+    exit(EXIT_SUCCESS);
   }
 }
 
