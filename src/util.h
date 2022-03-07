@@ -30,7 +30,7 @@
 #  define VXWM_LOG_LEVEL_INFO      1
 #  define VXWM_LOG_LEVEL_VERBOSE   2
 #  ifndef VXWM_LOG_LEVEL
-#    define VXWM_LOG_LEVEL         VXWM_LOG_LEVEL_INFO
+#    define VXWM_LOG_LEVEL         VXWM_LOG_LEVEL_VERBOSE
 #  endif
 #  define LOG(...)  fprintf(VXWM_LOG_FILE, __VA_ARGS__);
 #  define LOGW(...) if (VXWM_LOG_LEVEL >= VXWM_LOG_LEVEL_WARN) LOG(__VA_ARGS__);

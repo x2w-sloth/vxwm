@@ -280,7 +280,6 @@ void run(void)
   xcb_generic_event_t *ge;
   uint8_t type;
 
-  bar_draw(fm);
   xcb_flush(sn.conn);
   while (running && (ge = xcb_wait_for_event(sn.conn))) {
     type = XCB_EVENT_RESPONSE_TYPE(ge);
@@ -780,7 +779,6 @@ void mon_arrange(monitor_t *m)
   memset(m->lt_status, 0, VXWM_LT_STATUS_BUF);
   if (arg.ntiled > 0)
     pages[m->fp].lt(&arg);
-  bar_draw(m);
   xcb_flush(sn.conn);
   LOGI("arranged page %s\n", pages[m->fp].sym)
 }
@@ -790,6 +788,7 @@ void bar_draw(monitor_t *m)
   const color_t fg = 0xCCCCCC;
   const color_t bg = 0x333333;
   int i, n, x, tw, pad = 28;
+  LOGV("drawing status bar\n")
 
   draw_rect_filled(0, 0, sn.scr->width_in_pixels, VXWM_BAR_H, bg);
 
@@ -807,12 +806,15 @@ void bar_draw(monitor_t *m)
         draw_rect_filled(x + 5, 5, 5, 5, fg);
     }
   }
+  pad = 8;
 
   // draw layout status
-  draw_text_extents(m->lt_status, &tw, NULL);
-  pad = 8;
-  tw += pad;
-  draw_text(x, 0, tw, VXWM_BAR_H, m->lt_status, fg, pad / 2);
+  if (m->lt_status[0]) {
+    draw_text_extents(m->lt_status, &tw, NULL);
+    tw += pad;
+    draw_text(x, 0, tw, VXWM_BAR_H, m->lt_status, fg, pad / 2);
+    x += tw;
+  }
 
   // draw root window title
   draw_text_extents(root_name, &tw, NULL);
@@ -845,6 +847,7 @@ client_t *cln_create()
   c->y = c->py = 0;
   c->w = c->pw = VXWM_CLN_MIN_W;
   c->h = c->ph = VXWM_CLN_MIN_H;
+  memset(c->name, 0, VXWM_TAB_NAME_BUF);
 
   cln_add_frame(c);
   xcb_map_window(sn.conn, c->frame);
@@ -864,14 +867,15 @@ void cln_manage(xcb_window_t win)
   tab_attach(c, win);
   cln_attach(c);
 
+  xcb_map_window(sn.conn, win);
   win_type = win_get_atom_prop(c->tab[c->ft], net_atom[NetWmWindowType]);
   if (win_type == net_atom[NetWmWindowTypeDialog])
     c->isfloating = true;
 
-  xcb_map_window(sn.conn, win);
   win_set_state(win, XCB_ICCCM_WM_STATE_NORMAL);
   mon_arrange(fm);
   cln_set_focus(c);
+  bar_draw(fm);
 }
 
 void cln_delete(client_t *c)
@@ -881,6 +885,7 @@ void cln_delete(client_t *c)
   xcb_flush(sn.conn);
   LOGI("destroy frame: %d\n", c->frame)
   xfree(c->tab);
+  xfree(c->name);
   xfree(c);
 }
 
@@ -1129,6 +1134,7 @@ void cln_set_tag(client_t *c, uint32_t tag, bool toggle)
     mon_arrange(fm);
     cln_set_focus(fb);
   }
+  bar_draw(fm);
 }
 
 client_t *next_inpage(client_t *c)
@@ -1473,7 +1479,6 @@ void bn_focus_cln(const arg_t *arg)
   }
   cln_set_focus(c);
   bar_draw(fm);
-  xcb_flush(sn.conn);
 }
 
 void bn_focus_tab(const arg_t *arg)
@@ -1522,8 +1527,6 @@ void bn_focus_tab(const arg_t *arg)
   win_stack(win, Top);
   win_focus(win);
   tab_draw(fc);
-
-  xcb_flush(sn.conn);
   LOGI("focusing tab %d (%d/%d)\n", win, fc->ft + 1, fc->nt)
 }
 
@@ -1543,23 +1546,22 @@ void bn_focus_page(const arg_t *arg)
   fm->fp = arg->i;
   cln_show_hide(fm);
   cln_set_focus(NULL);
-  mon_arrange(fm);
   // TODO: cache the last focused client before switching pages
   cln_set_focus(next_inpage(fm->cln));
+  mon_arrange(fm);
+  bar_draw(fm);
 }
 
 void bn_toggle_tag(const arg_t *arg)
 {
   if (fc)
     cln_set_tag(fc, arg->u32, true);
-  bar_draw(fm);
 }
 
 void bn_set_tag(const arg_t *arg)
 {
   if (fc)
     cln_set_tag(fc, arg->u32, false);
-  bar_draw(fm);
 }
 
 void bn_set_param(const arg_t *arg)
@@ -1568,12 +1570,14 @@ void bn_set_param(const arg_t *arg)
   
   pages[fm->fp].par[v[0]] += v[1];
   mon_arrange(fm);
+  bar_draw(fm);
 }
 
 void bn_set_layout(const arg_t *arg)
 {
   pages[fm->fp].lt = arg->lt;
   mon_arrange(fm);
+  bar_draw(fm);
 }
 
 // column layout
