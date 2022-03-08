@@ -575,13 +575,16 @@ void on_enter_notify(xcb_generic_event_t *ge)
   xcb_enter_notify_event_t *e = (xcb_enter_notify_event_t *)ge;
   client_t *c;
 
-  if (e->mode != XCB_NOTIFY_MODE_NORMAL || e->detail == XCB_NOTIFY_DETAIL_INFERIOR)
+  if (e->mode != XCB_NOTIFY_MODE_NORMAL)
+    return;
+  if (e->detail == XCB_NOTIFY_DETAIL_VIRTUAL || e->detail == XCB_NOTIFY_DETAIL_INFERIOR)
     return;
   LOGV("on_enter_notify: %d, %d @ %d\n", e->event, e->detail, e->sequence)
 
-  if ((c = frame_to_cln(e->event)))
+  if ((c = frame_to_cln(e->event))) {
     cln_set_focus(c);
-  xcb_flush(sn.conn);
+    xcb_flush(sn.conn);
+  }
 }
 
 void on_focus_in(xcb_generic_event_t *ge)
@@ -1406,8 +1409,9 @@ void bn_merge_cln(const arg_t *arg)
   xassert(nsel == 0, "bad selection counting");
   win_stack(mc->tab[mc->ft], Top);
   win_set_state(mc->tab[mc->ft], XCB_ICCCM_WM_STATE_NORMAL);
-  cln_set_focus(mc);
   mon_arrange(fm);
+  cln_set_focus(mc);
+  xcb_flush(sn.conn);
 }
 
 void bn_split_cln(UNUSED const arg_t *arg)
@@ -1444,8 +1448,9 @@ void bn_split_cln(UNUSED const arg_t *arg)
     win_set_state(c->tab[c->ft], XCB_ICCCM_WM_STATE_NORMAL);
   }
   xassert(nsel == 0, "bad selection counting");
-  cln_set_focus(sc ? sc : fc);
   mon_arrange(fm);
+  cln_set_focus(sc ? sc : fc);
+  xcb_flush(sn.conn);
 }
 
 void bn_focus_cln(const arg_t *arg)
@@ -1546,9 +1551,9 @@ void bn_focus_page(const arg_t *arg)
   fm->fp = arg->i;
   cln_show_hide(fm);
   cln_set_focus(NULL);
+  mon_arrange(fm);
   // TODO: cache the last focused client before switching pages
   cln_set_focus(next_inpage(fm->cln));
-  mon_arrange(fm);
   bar_draw(fm);
 }
 
