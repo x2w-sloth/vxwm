@@ -339,7 +339,7 @@ xcb_keycode_t *keysym_to_keycodes(xcb_keysym_t keysym)
   xcb_keycode_t *keycodes;
 
   keycodes = xcb_key_symbols_get_keycode(symbols, keysym); // this can be slow
-  xassert(keycodes, "failed to allocate keycodes from symbol table");
+  assert(keycodes && "failed to allocate keycodes from symbol table");
   return keycodes; // remember to free this
 }
 
@@ -369,13 +369,13 @@ void ptr_motion(ptr_state_t state)
   xcb_get_geometry_reply_t *geo;
 
   ptr = xcb_query_pointer_reply(sn.conn, xcb_query_pointer(sn.conn, sn.root), NULL);
-  xassert(ptr, "did not receive a reply from query pointer");
+  assert(ptr && "did not receive a reply from query pointer");
   ptr_x = ptr->root_x;
   ptr_y = ptr->root_y;
   xfree(ptr);
 
   geo = xcb_get_geometry_reply(sn.conn, xcb_get_geometry(sn.conn, fc->frame), NULL);
-  xassert(geo, "did not receive a reply from get geometery");
+  assert(geo && "did not receive a reply from get geometery");
   win_x = geo->x;
   win_y = geo->y;
   win_w = geo->width;
@@ -682,7 +682,7 @@ void on_configure_request(xcb_generic_event_t *ge)
   LOGV("on_configure_request: %d\n", e->window)
 
   if ((c = tab_to_cln(e->window)) && c->isfloating) {
-    xassert(e->window == c->tab[c->ft], "configured window is not focus tab");
+    assert(e->window == c->tab[c->ft] && "configured window is not focus tab");
     x = c->x;
     y = c->y;
     w = c->w;
@@ -832,7 +832,7 @@ void bar_draw(monitor_t *m)
 
 client_t *cln_create()
 {
-  xassert(fm, "no focus monitor");
+  assert(fm && "no focus monitor");
   client_t *c;
 
   c = xmalloc(sizeof(client_t));
@@ -894,7 +894,7 @@ void cln_delete(client_t *c)
 
 void cln_unmanage(client_t *c)
 {
-  xassert(c->nt == 0, "should not unmanage client with existing tabs");
+  assert(c->nt == 0 && "should not unmanage client with existing tabs");
   client_t *fb;
 
   fb = cln_focus_fallback(c);
@@ -1117,7 +1117,7 @@ void cln_show_hide(monitor_t *m)
 
 void cln_set_tag(client_t *c, uint32_t tag, bool toggle)
 {
-  xassert(c, "bad call to cln_set_tag");
+  assert(c && "bad call to cln_set_tag");
   client_t *fb;
 
   if (toggle)
@@ -1257,7 +1257,7 @@ void bn_swap_tab(const arg_t *arg)
       swp = fc->ft == fc->nt - 1 ? 0 : fc->ft + 1;
       break;
     default:
-      xassert(false, "bad argument in bn_swap_tab");
+      assert(false && "bad argument in bn_swap_tab");
       return;
   }
   SWAP_BITS(fc->sel, swp, fc->ft);
@@ -1302,7 +1302,7 @@ void bn_swap_cln(const arg_t *arg)
       p = next_tiled(fc->next);
       break;
     default:
-      xassert(false, "bad argument in bn_swap_cln");
+      assert(false && "bad argument in bn_swap_cln");
       return;
   }
   // reattach focus client
@@ -1406,7 +1406,7 @@ void bn_merge_cln(const arg_t *arg)
       c = next_selected(c->next);
     }
   }
-  xassert(nsel == 0, "bad selection counting");
+  assert(nsel == 0 && "bad selection counting");
   win_stack(mc->tab[mc->ft], Top);
   win_set_state(mc->tab[mc->ft], XCB_ICCCM_WM_STATE_NORMAL);
   mon_arrange(fm);
@@ -1447,7 +1447,7 @@ void bn_split_cln(UNUSED const arg_t *arg)
     }
     win_set_state(c->tab[c->ft], XCB_ICCCM_WM_STATE_NORMAL);
   }
-  xassert(nsel == 0, "bad selection counting");
+  assert(nsel == 0 && "bad selection counting");
   mon_arrange(fm);
   cln_set_focus(sc ? sc : fc);
   xcb_flush(sn.conn);

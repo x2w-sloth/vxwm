@@ -4,17 +4,6 @@
 #include "util.h"
 #include "vxwm.h"
 
-#ifdef VXWM_DEBUG
-
-void xassert(bool assertion, const char *emsg)
-{
-  if (assertion == true)
-    return;
-  die(emsg);
-}
-
-#endif // VXWM_DEBUG
-
 void *xmalloc(size_t size)
 {
   void *mem = malloc(size);

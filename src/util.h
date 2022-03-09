@@ -22,7 +22,7 @@
 #else
 #  define UNUSED
 #  define INLINE            inline
-#endif
+#endif // __GNUC__
 
 #ifdef VXWM_DEBUG
 #  define VXWM_LOG_FILE            stdout
@@ -36,13 +36,14 @@
 #  define LOGW(...) if (VXWM_LOG_LEVEL >= VXWM_LOG_LEVEL_WARN) LOG(__VA_ARGS__);
 #  define LOGI(...) if (VXWM_LOG_LEVEL >= VXWM_LOG_LEVEL_INFO) LOG(__VA_ARGS__);
 #  define LOGV(...) if (VXWM_LOG_LEVEL >= VXWM_LOG_LEVEL_VERBOSE) LOG(__VA_ARGS__);
-void xassert(bool, const char *);
 #else
 #  define LOGW(...) ;
 #  define LOGI(...) ;
 #  define LOGV(...) ;
-#  define xassert(...)
+#  define NDEBUG
 #endif // VXWM_DEBUG
+
+#include <assert.h>
 
 void *xmalloc(size_t);
 void *xrealloc(void *, size_t);
