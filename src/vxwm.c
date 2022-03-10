@@ -120,7 +120,6 @@ static bool win_has_proto(xcb_window_t, xcb_atom_t);
 static void win_send_proto(xcb_window_t, xcb_atom_t);
 static void win_kill(xcb_window_t);
 static void grant_configure_request(xcb_configure_request_event_t *);
-// event handlers
 static void on_key_press(xcb_generic_event_t *);
 static void on_button_press(xcb_generic_event_t *);
 static void on_motion_notify(xcb_generic_event_t *);
@@ -132,12 +131,10 @@ static void on_unmap_notify(xcb_generic_event_t *);
 static void on_map_request(xcb_generic_event_t *);
 static void on_configure_request(xcb_generic_event_t *);
 static void on_property_notify(xcb_generic_event_t *);
-// monitors and bars
 static monitor_t *mon_create(void);
 static void mon_delete(monitor_t *);
 static void mon_arrange(monitor_t *);
-static void bar_draw(monitor_t *);
-// clients and tabs
+static void mon_draw_bar(monitor_t *);
 static client_t *cln_create(void);
 static void cln_manage(xcb_window_t);
 static void cln_delete(client_t *);
@@ -154,9 +151,9 @@ static void cln_resize(client_t *, int, int);
 static void cln_move_resize(client_t *, int, int, int, int);
 static void cln_show_hide(monitor_t *);
 static void cln_set_tag(client_t *, uint32_t, bool);
-static void tab_attach(client_t *, xcb_window_t);
-static void tab_detach(client_t *, xcb_window_t);
-static void tab_draw(client_t *);
+static void cln_attach_tab(client_t *, xcb_window_t);
+static void cln_detach_tab(client_t *, xcb_window_t);
+static void cln_draw_tabs(client_t *);
 static client_t *next_inpage(client_t *);
 static client_t *prev_inpage(client_t *);
 static client_t *next_tiled(client_t *);
@@ -164,7 +161,6 @@ static client_t *next_selected(client_t *);
 static client_t *tab_to_cln(xcb_window_t);
 static client_t *frame_to_cln(xcb_window_t);
 static client_t *cln_focus_fallback(client_t *);
-// bindings
 static void bn_quit(const arg_t *);
 static void bn_spawn(const arg_t *);
 static void bn_kill_tab(const arg_t *);
@@ -184,10 +180,9 @@ static void bn_toggle_tag(const arg_t *);
 static void bn_set_tag(const arg_t *);
 static void bn_set_param(const arg_t *);
 static void bn_set_layout(const arg_t *);
-// layouts
 static void column(const layout_arg_t *);
 static void stack(const layout_arg_t *);
-// globals
+
 static xcb_key_symbols_t *symbols;
 static xcb_atom_t wm_atom[WmAtomsLast];
 static xcb_atom_t net_atom[NetAtomsLast];
@@ -577,7 +572,8 @@ void on_enter_notify(xcb_generic_event_t *ge)
 
   if (e->mode != XCB_NOTIFY_MODE_NORMAL)
     return;
-  if (e->detail == XCB_NOTIFY_DETAIL_VIRTUAL || e->detail == XCB_NOTIFY_DETAIL_INFERIOR)
+  if (e->detail == XCB_NOTIFY_DETAIL_ANCESTOR || e->detail == XCB_NOTIFY_DETAIL_VIRTUAL
+  ||  e->detail == XCB_NOTIFY_DETAIL_INFERIOR)
     return;
   LOGV("on_enter_notify: %d, %d @ %d\n", e->event, e->detail, e->sequence)
 
@@ -611,9 +607,9 @@ void on_expose(xcb_generic_event_t *ge)
   client_t *c = frame_to_cln(e->window);
 
   if (e->window == fm->barwin)
-    bar_draw(fm);
+    mon_draw_bar(fm);
   else if ((c = frame_to_cln(e->window)))
-    tab_draw(c);
+    cln_draw_tabs(c);
 }
 
 void on_destroy_notify(xcb_generic_event_t *ge)
@@ -626,7 +622,7 @@ void on_destroy_notify(xcb_generic_event_t *ge)
   if (!c)
     return;
 
-  tab_detach(c, e->window);
+  cln_detach_tab(c, e->window);
   if (c->nt == 0)
     cln_unmanage(c);
   else
@@ -641,7 +637,7 @@ void on_unmap_notify(xcb_generic_event_t *ge)
   LOGV("on_unmap_notify: %d\n", e->window)
 
   if ((c = tab_to_cln(e->window))) {
-    tab_detach(c, e->window);
+    cln_detach_tab(c, e->window);
     win_set_state(e->window, XCB_ICCCM_WM_STATE_WITHDRAWN);
     xcb_change_save_set(sn.conn, XCB_SET_MODE_DELETE, e->window);
     LOGI("window %d deleted from save set\n", e->window)
@@ -711,7 +707,7 @@ void on_property_notify(xcb_generic_event_t *ge)
 
   if (e->window == sn.root && e->atom == XCB_ATOM_WM_NAME) {
     win_get_text_prop(sn.root, XCB_ATOM_WM_NAME, root_name, VXWM_ROOT_NAME_BUF);
-    bar_draw(fm);
+    mon_draw_bar(fm);
   }
   xcb_flush(sn.conn);
 }
@@ -744,7 +740,7 @@ monitor_t *mon_create(void)
 
 void mon_delete(monitor_t *m)
 {
-  // xassert(!m->cln, "deleting a monitor with clients");
+  // xassert(!m->cln && "deleting a monitor with clients");
   xcb_unmap_window(sn.conn, m->barwin);
   xcb_destroy_window(sn.conn, m->barwin);
   xfree(m);
@@ -786,7 +782,7 @@ void mon_arrange(monitor_t *m)
   LOGI("arranged page %s\n", pages[m->fp].sym)
 }
 
-void bar_draw(monitor_t *m)
+void mon_draw_bar(monitor_t *m)
 {
   const color_t fg = 0xCCCCCC;
   const color_t bg = 0x333333;
@@ -867,7 +863,7 @@ void cln_manage(xcb_window_t win)
   LOGI("window %d added to save set\n", win)
 
   c = cln_create();
-  tab_attach(c, win);
+  cln_attach_tab(c, win);
   cln_attach(c);
 
   xcb_map_window(sn.conn, win);
@@ -878,7 +874,7 @@ void cln_manage(xcb_window_t win)
   win_set_state(win, XCB_ICCCM_WM_STATE_NORMAL);
   mon_arrange(fm);
   cln_set_focus(c);
-  bar_draw(fm);
+  mon_draw_bar(fm);
 }
 
 void cln_delete(client_t *c)
@@ -963,7 +959,7 @@ void cln_set_focus(client_t *c)
     pf = fc;
     fc = c;
     xcb_change_window_attributes(sn.conn, pf->frame, XCB_CW_BORDER_PIXEL, &nclr);
-    tab_draw(pf);
+    cln_draw_tabs(pf);
   }
 
   // assign new focus client or loose focus
@@ -971,7 +967,7 @@ void cln_set_focus(client_t *c)
     cln_raise(fc);
     xcb_change_window_attributes(sn.conn, fc->frame, XCB_CW_BORDER_PIXEL, &fclr);
     win_focus(fc->tab[fc->ft]);
-    tab_draw(fc);
+    cln_draw_tabs(fc);
     LOGI("new focus: %d (%d)\n", fc->tab[fc->ft], fc->frame)
   } else {
     win_focus(sn.root);
@@ -990,7 +986,7 @@ void cln_set_focus(client_t *c)
 void cln_raise(client_t *c)
 {
   win_stack(c->frame, Top);
-  tab_draw(c);
+  cln_draw_tabs(c);
 }
 
 void cln_set_fullscr(client_t *c, bool fullscr)
@@ -1005,7 +1001,7 @@ void cln_set_fullscr(client_t *c, bool fullscr)
   }
 }
 
-void tab_attach(client_t *c, xcb_window_t win)
+void cln_attach_tab(client_t *c, xcb_window_t win)
 {
   if (c->nt == c->tcap) {
     c->tcap <<= 1;
@@ -1029,14 +1025,14 @@ void tab_attach(client_t *c, xcb_window_t win)
   LOGV("attached %d under frame %d\n", win, c->frame)
 }
 
-void tab_detach(client_t *c, xcb_window_t win)
+void cln_detach_tab(client_t *c, xcb_window_t win)
 {
   uint32_t lsb_mask;
   int i;
 
   for (i = 0; i < c->nt && c->tab[i] != win; i++) ;
   if (i >= c->nt) {
-    LOGW("window not found in tab_detach\n")
+    LOGW("window not found in cln_detach_tab\n")
     return;
   }
 
@@ -1052,7 +1048,7 @@ void tab_detach(client_t *c, xcb_window_t win)
   c->ft = MAX(c->ft - 1, 0);
 }
 
-void tab_draw(client_t *c)
+void cln_draw_tabs(client_t *c)
 {
   int tw, sw, i;
 
@@ -1091,7 +1087,7 @@ void cln_resize(client_t *c, int w, int h)
   xcb_configure_window(sn.conn, c->frame, masks, vals);
   vals[1] = c->h - VXWM_TAB_HEIGHT;
   xcb_configure_window(sn.conn, c->tab[c->ft], masks, vals);
-  tab_draw(c);
+  cln_draw_tabs(c);
 }
 
 void cln_move_resize(client_t *c, int x, int y, int w, int h)
@@ -1137,7 +1133,7 @@ void cln_set_tag(client_t *c, uint32_t tag, bool toggle)
     mon_arrange(fm);
     cln_set_focus(fb);
   }
-  bar_draw(fm);
+  mon_draw_bar(fm);
 }
 
 client_t *next_inpage(client_t *c)
@@ -1338,7 +1334,7 @@ void bn_toggle_select(UNUSED const arg_t *arg)
 
   fc->sel ^= LSB(fc->ft);
   nsel += (fc->sel & LSB(fc->ft)) ? +1 : -1;
-  tab_draw(fc);
+  cln_draw_tabs(fc);
   xcb_flush(sn.conn);
 }
 
@@ -1392,8 +1388,8 @@ void bn_merge_cln(const arg_t *arg)
     while (c->sel) { // consume selection
       for (i = 0; !(c->sel & LSB(i)); i++) ;
       win = c->tab[i];
-      tab_detach(c, win);
-      tab_attach(mc, win);
+      cln_detach_tab(c, win);
+      cln_attach_tab(mc, win);
       win_set_state(win, XCB_ICCCM_WM_STATE_ICONIC);
     }
     if (c->nt == 0) {
@@ -1402,7 +1398,7 @@ void bn_merge_cln(const arg_t *arg)
       cln_detach(d);  
       cln_delete(d);
     } else {
-      tab_draw(c);
+      cln_draw_tabs(c);
       c = next_selected(c->next);
     }
   }
@@ -1427,8 +1423,8 @@ void bn_split_cln(UNUSED const arg_t *arg)
     sc = cln_create();
     cln_attach(sc);
     win = fc->tab[fc->ft];
-    tab_detach(fc, win);
-    tab_attach(sc, win);
+    cln_detach_tab(fc, win);
+    cln_attach_tab(sc, win);
     win_set_state(fc->tab[fc->ft], XCB_ICCCM_WM_STATE_NORMAL);
   } else for (c = next_selected(fm->cln); c; c = next_selected(c->next)) {
     while (c->sel) { // consume selection
@@ -1441,8 +1437,8 @@ void bn_split_cln(UNUSED const arg_t *arg)
       cln_attach(sc);
       for (i = 0; !(c->sel & LSB(i)); i++) ;
       win = c->tab[i];
-      tab_detach(c, win);
-      tab_attach(sc, win);
+      cln_detach_tab(c, win);
+      cln_attach_tab(sc, win);
       win_set_state(win, XCB_ICCCM_WM_STATE_NORMAL);
     }
     win_set_state(c->tab[c->ft], XCB_ICCCM_WM_STATE_NORMAL);
@@ -1483,7 +1479,7 @@ void bn_focus_cln(const arg_t *arg)
       break;
   }
   cln_set_focus(c);
-  bar_draw(fm);
+  mon_draw_bar(fm);
 }
 
 void bn_focus_tab(const arg_t *arg)
@@ -1531,7 +1527,7 @@ void bn_focus_tab(const arg_t *arg)
   // raise tab window and redraw client tabs
   win_stack(win, Top);
   win_focus(win);
-  tab_draw(fc);
+  cln_draw_tabs(fc);
   LOGI("focusing tab %d (%d/%d)\n", win, fc->ft + 1, fc->nt)
 }
 
@@ -1554,7 +1550,7 @@ void bn_focus_page(const arg_t *arg)
   mon_arrange(fm);
   // TODO: cache the last focused client before switching pages
   cln_set_focus(next_inpage(fm->cln));
-  bar_draw(fm);
+  mon_draw_bar(fm);
 }
 
 void bn_toggle_tag(const arg_t *arg)
@@ -1575,14 +1571,14 @@ void bn_set_param(const arg_t *arg)
   
   pages[fm->fp].par[v[0]] += v[1];
   mon_arrange(fm);
-  bar_draw(fm);
+  mon_draw_bar(fm);
 }
 
 void bn_set_layout(const arg_t *arg)
 {
   pages[fm->fp].lt = arg->lt;
   mon_arrange(fm);
-  bar_draw(fm);
+  mon_draw_bar(fm);
 }
 
 // column layout
