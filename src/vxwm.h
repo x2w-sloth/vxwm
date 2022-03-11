@@ -31,10 +31,27 @@ typedef enum {
   PtrResizeCln
 } ptr_state_t;
 
+enum {
+  WmProtocols = 0,
+  WmTakeFocus,
+  WmDeleteWindow,
+  WmState,
+  WmAtomsLast,
+};
+
+enum {
+  NetWmName = 0,
+  NetWmWindowType,
+  NetWmWindowTypeDialog,
+  NetAtomsLast,
+};
+
 typedef struct session {
   xcb_connection_t *conn;
   xcb_screen_t *scr;
   xcb_window_t root;
+  xcb_atom_t wm_atom[WmAtomsLast];
+  xcb_atom_t net_atom[NetAtomsLast];
 } session_t;
 
 extern session_t sn;

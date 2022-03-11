@@ -10,6 +10,7 @@
 #include <xcb/xcb_icccm.h>
 #include "vxwm.h"
 #include "util.h"
+#include "win.h"
 #include "draw.h"
 
 #define VXWM_CLN_MIN_W           30
@@ -87,21 +88,6 @@ struct btnbind {
   arg_t arg;
 };
 
-enum {
-  WmProtocols = 0,
-  WmTakeFocus,
-  WmDeleteWindow,
-  WmState,
-  WmAtomsLast,
-};
-
-enum {
-  NetWmName = 0,
-  NetWmWindowType,
-  NetWmWindowTypeDialog,
-  NetAtomsLast,
-};
-
 static void args(int, char **);
 static void setup(void);
 static void run(void);
@@ -111,14 +97,6 @@ static xcb_keycode_t *keysym_to_keycodes(xcb_keysym_t);
 static xcb_keysym_t keycode_to_keysym(xcb_keycode_t);
 static void grab_keys(void);
 static void ptr_motion(ptr_state_t);
-static xcb_atom_t win_get_atom_prop(xcb_window_t, xcb_atom_t);
-static bool win_get_text_prop(xcb_window_t, xcb_atom_t, char *, size_t);
-static void win_stack(xcb_window_t, pos_t);
-static void win_focus(xcb_window_t);
-static void win_set_state(xcb_window_t, uint32_t);
-static bool win_has_proto(xcb_window_t, xcb_atom_t);
-static void win_send_proto(xcb_window_t, xcb_atom_t);
-static void win_kill(xcb_window_t);
 static void grant_configure_request(xcb_configure_request_event_t *);
 static void on_key_press(xcb_generic_event_t *);
 static void on_button_press(xcb_generic_event_t *);
@@ -158,8 +136,8 @@ static client_t *next_inpage(client_t *);
 static client_t *prev_inpage(client_t *);
 static client_t *next_tiled(client_t *);
 static client_t *next_selected(client_t *);
-static client_t *tab_to_cln(xcb_window_t);
-static client_t *frame_to_cln(xcb_window_t);
+static client_t *cln_from_tab(xcb_window_t);
+static client_t *cln_from_frame(xcb_window_t);
 static client_t *cln_focus_fallback(client_t *);
 static void bn_quit(const arg_t *);
 static void bn_spawn(const arg_t *);
@@ -184,8 +162,6 @@ static void column(const layout_arg_t *);
 static void stack(const layout_arg_t *);
 
 static xcb_key_symbols_t *symbols;
-static xcb_atom_t wm_atom[WmAtomsLast];
-static xcb_atom_t net_atom[NetAtomsLast];
 static monitor_t *fm;
 static client_t *fc;
 static ptr_state_t ptr_state;
@@ -317,13 +293,13 @@ void atom_setup(void)
 
   for (i = 0; i < WmAtomsLast; i++)
     if ((reply = xcb_intern_atom_reply(sn.conn, wm_cookies[i], NULL))) {
-      wm_atom[i] = reply->atom;
+      sn.wm_atom[i] = reply->atom;
       xfree(reply);
     }
 
   for (i = 0; i < NetAtomsLast; i++)
     if ((reply = xcb_intern_atom_reply(sn.conn, net_cookies[i], NULL))) {
-      net_atom[i] = reply->atom;
+      sn.net_atom[i] = reply->atom;
       xfree(reply);
     }
 }
@@ -361,7 +337,6 @@ void grab_keys(void)
 void ptr_motion(ptr_state_t state)
 {
   xcb_query_pointer_reply_t *ptr;
-  xcb_get_geometry_reply_t *geo;
 
   ptr = xcb_query_pointer_reply(sn.conn, xcb_query_pointer(sn.conn, sn.root), NULL);
   assert(ptr && "did not receive a reply from query pointer");
@@ -369,115 +344,9 @@ void ptr_motion(ptr_state_t state)
   ptr_y = ptr->root_y;
   xfree(ptr);
 
-  geo = xcb_get_geometry_reply(sn.conn, xcb_get_geometry(sn.conn, fc->frame), NULL);
-  assert(geo && "did not receive a reply from get geometery");
-  win_x = geo->x;
-  win_y = geo->y;
-  win_w = geo->width;
-  win_h = geo->height;
-  xfree(geo);
+  win_get_geometry(fc->frame, &win_x, &win_y, &win_w, &win_h, NULL);
 
   ptr_state = state; // see on_motion_notify
-}
-
-xcb_atom_t win_get_atom_prop(xcb_window_t win, xcb_atom_t prop)
-{
-  xcb_get_property_reply_t *reply;
-  xcb_get_property_cookie_t cookie;
-  xcb_atom_t *atom;
-  
-  cookie = xcb_get_property(sn.conn, 0, win, prop, XCB_ATOM_ATOM, 0, UINT32_MAX);
-  reply = xcb_get_property_reply(sn.conn, cookie, NULL);
-  if (!reply || !(atom = xcb_get_property_value(reply)))
-    return XCB_ATOM_NONE;
-  xfree(reply);
-  return *atom;
-}
-
-bool win_get_text_prop(xcb_window_t win, xcb_atom_t prop, char *text, size_t tsize)
-{
-  xcb_get_property_reply_t *reply;
-  xcb_get_property_cookie_t cookie;
-  size_t rsize;
-  const char *buf;
-
-  if (!text || tsize == 0)
-    return false;
-  cookie = xcb_get_property(sn.conn, 0, win, prop, XCB_GET_PROPERTY_TYPE_ANY, 0, UINT8_MAX);
-  reply = xcb_get_property_reply(sn.conn, cookie, NULL);
-  if (!reply || (rsize = xcb_get_property_value_length(reply)) == 0 || rsize > tsize)
-    return false;
-  buf = xcb_get_property_value(reply);
-  strncpy(text, buf, rsize);
-  text[rsize] = '\0';
-  xfree(reply);
-  return true;
-}
-
-void win_stack(xcb_window_t win, pos_t p)
-{
-  masks = XCB_CONFIG_WINDOW_STACK_MODE;
-  vals[0] = p == Top ? XCB_STACK_MODE_ABOVE : XCB_STACK_MODE_BELOW;
-  xcb_configure_window(sn.conn, win, masks, vals);
-}
-
-/// Sets the input focus window.
-/// If the window supports WM_TAKE_FOCUS protocol, send a client message to it.
-void win_focus(xcb_window_t win)
-{
-  if (win != sn.root && win_has_proto(win, wm_atom[WmTakeFocus]))
-    win_send_proto(win, wm_atom[WmTakeFocus]);
-  xcb_set_input_focus(sn.conn, XCB_INPUT_FOCUS_POINTER_ROOT, win, XCB_CURRENT_TIME);
-}
-
-/// Sets the WM_STATE property of a window.
-void win_set_state(xcb_window_t win, uint32_t state)
-{
-  uint32_t data[] = { state, XCB_NONE };
-  xcb_change_property(sn.conn, XCB_PROP_MODE_REPLACE, win,
-                      wm_atom[WmState], wm_atom[WmState], 32, 2, data);
-}
-
-/// Queries if a window has a certain WM_PROTOCOL property.
-bool win_has_proto(xcb_window_t win, xcb_atom_t proto)
-{
-  xcb_icccm_get_wm_protocols_reply_t reply;
-  xcb_get_property_cookie_t cookie;
-  int i, n;
-
-  cookie = xcb_icccm_get_wm_protocols_unchecked(sn.conn, win, wm_atom[WmProtocols]);
-  if (!xcb_icccm_get_wm_protocols_reply(sn.conn, cookie, &reply, NULL)) {
-    LOGW("failed to retrieve wm protocols for %d\n", win)
-    return false;
-  }
-
-  for (i = 0, n = reply.atoms_len; i < n && reply.atoms[i] != proto; i++) ;
-  xcb_icccm_get_wm_protocols_reply_wipe(&reply);
-  return i != n;
-}
-
-/// Sends a WM_PROTOCOL client message to a window.
-void win_send_proto(xcb_window_t win, xcb_atom_t proto)
-{
-  xcb_client_message_event_t msg;
-
-  msg.response_type = XCB_CLIENT_MESSAGE;
-  msg.format = 32;
-  msg.window = win;
-  msg.type = wm_atom[WmProtocols];
-  msg.data.data32[0] = proto;
-  msg.data.data32[1] = XCB_TIME_CURRENT_TIME;
-  xcb_send_event(sn.conn, false, win, XCB_EVENT_MASK_NO_EVENT, (const char *)&msg);
-}
-
-/// If the window supports WM_DELETE_WINDOW protocol, send a client message to it.
-/// Otherwise kill it directly from our side.
-void win_kill(xcb_window_t win)
-{
-  if (win_has_proto(win, wm_atom[WmDeleteWindow]))
-    win_send_proto(win, wm_atom[WmDeleteWindow]);
-  else
-    xcb_kill_client(sn.conn, win);
 }
 
 void grant_configure_request(xcb_configure_request_event_t *e)
@@ -534,7 +403,7 @@ void on_button_press(xcb_generic_event_t *ge)
   int i, n;
   LOGV("on_button_press: %d @ %d\n", e->event, e->sequence)
 
-  cln_set_focus(frame_to_cln(e->event));
+  cln_set_focus(cln_from_frame(e->event));
   for (i = 0, n = LENGTH(btnbinds); i < n; i++)
     if (e->detail == btnbinds[i].btn && e->state == btnbinds[i].mod && btnbinds[i].fn) {
       ptr_first_motion = true;
@@ -577,7 +446,7 @@ void on_enter_notify(xcb_generic_event_t *ge)
     return;
   LOGV("on_enter_notify: %d, %d @ %d\n", e->event, e->detail, e->sequence)
 
-  if ((c = frame_to_cln(e->event))) {
+  if ((c = cln_from_frame(e->event))) {
     cln_set_focus(c);
     xcb_flush(sn.conn);
   }
@@ -595,7 +464,7 @@ void on_focus_in(xcb_generic_event_t *ge)
     return;
   LOGV("on_focus_in: %d @ %d\n", e->event, e->sequence)
 
-  if ((c = tab_to_cln(e->event))) {
+  if ((c = cln_from_tab(e->event))) {
     cln_set_focus(c);
     xcb_flush(sn.conn);
   }
@@ -604,18 +473,18 @@ void on_focus_in(xcb_generic_event_t *ge)
 void on_expose(xcb_generic_event_t *ge)
 {
   xcb_expose_event_t *e = (xcb_expose_event_t *)ge;
-  client_t *c = frame_to_cln(e->window);
+  client_t *c = cln_from_frame(e->window);
 
   if (e->window == fm->barwin)
     mon_draw_bar(fm);
-  else if ((c = frame_to_cln(e->window)))
+  else if ((c = cln_from_frame(e->window)))
     cln_draw_tabs(c);
 }
 
 void on_destroy_notify(xcb_generic_event_t *ge)
 {
   xcb_destroy_notify_event_t *e = (xcb_destroy_notify_event_t *)ge;
-  client_t *c = tab_to_cln(e->window);
+  client_t *c = cln_from_tab(e->window);
   arg_t arg = { .p = This };
   LOGV("on_destroy_notify: %d\n", e->window)
 
@@ -636,7 +505,7 @@ void on_unmap_notify(xcb_generic_event_t *ge)
   arg_t arg = { .p = This };
   LOGV("on_unmap_notify: %d\n", e->window)
 
-  if ((c = tab_to_cln(e->window))) {
+  if ((c = cln_from_tab(e->window))) {
     cln_detach_tab(c, e->window);
     win_set_state(e->window, XCB_ICCCM_WM_STATE_WITHDRAWN);
     xcb_change_save_set(sn.conn, XCB_SET_MODE_DELETE, e->window);
@@ -651,19 +520,19 @@ void on_unmap_notify(xcb_generic_event_t *ge)
 void on_map_request(xcb_generic_event_t *ge)
 {
   xcb_map_request_event_t *e = (xcb_map_request_event_t *)ge;
-  xcb_get_window_attributes_cookie_t cookie;
-  xcb_get_window_attributes_reply_t *wa;
-  client_t *c = tab_to_cln(e->window);
+  xcb_get_window_attributes_cookie_t wac;
+  xcb_get_window_attributes_reply_t *war;
+  client_t *c = cln_from_tab(e->window);
   LOGV("on_map_request: %d\n", e->window)
 
-  cookie = xcb_get_window_attributes(sn.conn, e->window);
-  wa = xcb_get_window_attributes_reply(sn.conn, cookie, NULL);
+  wac = xcb_get_window_attributes(sn.conn, e->window);
+  war = xcb_get_window_attributes_reply(sn.conn, wac, NULL);
 
-  if (!wa || wa->override_redirect) {
-    xfree(wa);
+  if (!war || war->override_redirect) {
+    xfree(war);
     return;
   }
-  xfree(wa);
+  xfree(war);
   if (!c) {
     cln_manage(e->window);
     xcb_flush(sn.conn);
@@ -677,7 +546,7 @@ void on_configure_request(xcb_generic_event_t *ge)
   int x, y, w, h;
   LOGV("on_configure_request: %d\n", e->window)
 
-  if ((c = tab_to_cln(e->window)) && c->isfloating) {
+  if ((c = cln_from_tab(e->window)) && c->isfloating) {
     assert(e->window == c->tab[c->ft] && "configured window is not focus tab");
     x = c->x;
     y = c->y;
@@ -703,7 +572,7 @@ void on_configure_request(xcb_generic_event_t *ge)
 void on_property_notify(xcb_generic_event_t *ge)
 {
   xcb_property_notify_event_t *e = (xcb_property_notify_event_t *)ge;
-  LOGV("on_property_notify: %d @ %d", e->window, e->sequence)
+  LOGV("on_property_notify: %d @ %d\n", e->window, e->sequence)
 
   if (e->window == sn.root && e->atom == XCB_ATOM_WM_NAME) {
     win_get_text_prop(sn.root, XCB_ATOM_WM_NAME, root_name, VXWM_ROOT_NAME_BUF);
@@ -858,6 +727,7 @@ void cln_manage(xcb_window_t win)
 {
   client_t *c;
   xcb_atom_t win_type;
+  int x, y, w, h;
 
   xcb_change_save_set(sn.conn, XCB_SET_MODE_INSERT, win);
   LOGI("window %d added to save set\n", win)
@@ -867,9 +737,14 @@ void cln_manage(xcb_window_t win)
   cln_attach(c);
 
   xcb_map_window(sn.conn, win);
-  win_type = win_get_atom_prop(c->tab[c->ft], net_atom[NetWmWindowType]);
-  if (win_type == net_atom[NetWmWindowTypeDialog])
+  win_type = win_get_atom_prop(c->tab[c->ft], sn.net_atom[NetWmWindowType]);
+  if (win_type == sn.net_atom[NetWmWindowTypeDialog])
     c->isfloating = true;
+
+  if (c->isfloating) {
+    win_get_geometry(win, &x, &y, &w, &h, NULL);
+    cln_move_resize(c, x, y, w, h);
+  }
 
   win_set_state(win, XCB_ICCCM_WM_STATE_NORMAL);
   mon_arrange(fm);
@@ -1010,7 +885,7 @@ void cln_attach_tab(client_t *c, xcb_window_t win)
   }
 
   c->tab[c->nt] = win;
-  if (!win_get_text_prop(win, net_atom[NetWmName], c->name[c->nt], VXWM_TAB_NAME_BUF))
+  if (!win_get_text_prop(win, sn.net_atom[NetWmName], c->name[c->nt], VXWM_TAB_NAME_BUF))
     win_get_text_prop(win, XCB_ATOM_WM_NAME, c->name[c->nt], VXWM_TAB_NAME_BUF);
   c->nt++;
 
@@ -1161,7 +1036,7 @@ client_t *next_selected(client_t *c)
   return c;
 }
 
-client_t *tab_to_cln(xcb_window_t win)
+client_t *cln_from_tab(xcb_window_t win)
 {
   client_t *c;
   int i;
@@ -1173,7 +1048,7 @@ client_t *tab_to_cln(xcb_window_t win)
   return NULL;
 }
 
-client_t *frame_to_cln(xcb_window_t frame)
+client_t *cln_from_frame(xcb_window_t frame)
 {
   client_t *c;
 
@@ -1349,6 +1224,8 @@ void bn_toggle_float(UNUSED const arg_t *arg)
 
 void bn_toggle_fullscr(UNUSED const arg_t *arg)
 {
+  client_t *pf = fc;
+
   if (!fc)
     return;
 
@@ -1357,7 +1234,9 @@ void bn_toggle_fullscr(UNUSED const arg_t *arg)
     fc->isfullscr = false;
   } else
     fc->isfullscr = true;
+  cln_set_focus(NULL);
   mon_arrange(fm);
+  cln_set_focus(pf);
 }
 
 void bn_merge_cln(const arg_t *arg)
