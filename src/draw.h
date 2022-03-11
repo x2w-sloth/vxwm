@@ -1,6 +1,9 @@
 #ifndef VXWM_DRAW_H
 #define VXWM_DRAW_H
 
+// GRAPHICS DRAWING API
+//   utilities to draw on X11 drawables
+
 #include <xcb/xcb.h>
 
 typedef uint32_t color_t;
