@@ -63,9 +63,8 @@ bool win_get_text_prop(xcb_window_t win, xcb_atom_t prop, char *buf, uint32_t bu
   if (!buf || buf_len == 0)
     return false;
   pc = xcb_icccm_get_text_property(sn.conn, win, prop);
-  if (!xcb_icccm_get_text_property_reply(sn.conn, pc, &tpr, NULL)) {
-    LOGW("failed to retrieve %d text property for %d\n", prop, win)
-  }
+  if (!xcb_icccm_get_text_property_reply(sn.conn, pc, &tpr, NULL))
+    return false;
   if (tpr.name_len == 0 || tpr.name_len >= buf_len) {
     xcb_icccm_get_text_property_reply_wipe(&tpr);
     return false;
@@ -73,6 +72,7 @@ bool win_get_text_prop(xcb_window_t win, xcb_atom_t prop, char *buf, uint32_t bu
   strncpy(buf, tpr.name, tpr.name_len);
   buf[tpr.name_len] = '\0';
   xcb_icccm_get_text_property_reply_wipe(&tpr);
+  LOGV("got %d text property for %d: %s\n", prop, win, buf)
   return true;
 }
 
