@@ -42,17 +42,20 @@ void win_get_geometry(xcb_window_t win, int *x, int *y, int *w, int *h, int *bw)
   }
 }
 
-xcb_atom_t win_get_atom_prop(xcb_window_t win, xcb_atom_t prop)
+bool win_get_atom_prop(xcb_window_t win, xcb_atom_t prop, xcb_atom_t *reply)
 {
   xcb_get_property_reply_t *pr;
   xcb_atom_t *atom;
+
+  assert(reply);
 
   pr = win_get_prop(win, prop, XCB_ATOM_ATOM, NULL);
   atom = (xcb_atom_t *)xcb_get_property_value(pr);
   xfree(pr);
   if (!atom)
-    return XCB_ATOM_NONE;
-  return *atom;
+    return false;
+  *reply = *atom;
+  return true;
 }
 
 bool win_get_text_prop(xcb_window_t win, xcb_atom_t prop, char *buf, uint32_t buf_len)
