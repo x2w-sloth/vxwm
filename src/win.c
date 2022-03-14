@@ -20,26 +20,27 @@ xcb_get_property_reply_t *win_get_prop(xcb_window_t win, xcb_atom_t prop, xcb_at
   return pr;
 }
 
-void win_get_geometry(xcb_window_t win, int *x, int *y, int *w, int *h, int *bw)
+bool win_get_geometry(xcb_window_t win, int *x, int *y, int *w, int *h, int *bw)
 {
   xcb_get_geometry_cookie_t gc;
   xcb_get_geometry_reply_t *gr;
 
   gc = xcb_get_geometry(sn.conn, win);
   gr = xcb_get_geometry_reply(sn.conn, gc, NULL);
-  if (gr) {
-    if (x)
-      *x = (int)gr->x;
-    if (y)
-      *y = (int)gr->y;
-    if (w)
-      *w = (int)gr->width;
-    if (h)
-      *h = (int)gr->height;
-    if (bw)
-      *bw = (int)gr->border_width;
-    xfree(gr);
-  }
+  if (!gr)
+    return false;
+  if (x)
+    *x = (int)gr->x;
+  if (y)
+    *y = (int)gr->y;
+  if (w)
+    *w = (int)gr->width;
+  if (h)
+    *h = (int)gr->height;
+  if (bw)
+    *bw = (int)gr->border_width;
+  xfree(gr);
+  return true;
 }
 
 bool win_get_atom_prop(xcb_window_t win, xcb_atom_t prop, xcb_atom_t *reply)
@@ -77,6 +78,37 @@ bool win_get_text_prop(xcb_window_t win, xcb_atom_t prop, char *buf, uint32_t bu
   xcb_icccm_get_text_property_reply_wipe(&tpr);
   LOGV("got %d text property for %d: %s\n", prop, win, buf)
   return true;
+}
+
+bool win_get_attr(xcb_window_t win, bool *or, uint8_t *ms)
+{
+  xcb_get_window_attributes_cookie_t wac;
+  xcb_get_window_attributes_reply_t *war;
+
+  wac = xcb_get_window_attributes(sn.conn, win);
+  war = xcb_get_window_attributes_reply(sn.conn, wac, NULL);
+
+  if (!war)
+    return false;
+  if (or)
+    *or = (bool)war->override_redirect; 
+  if (ms)
+    *ms = war->map_state;
+  xfree(war);
+  return true;
+}
+
+bool win_get_state(xcb_window_t win, uint32_t *state)
+{
+  xcb_get_property_reply_t *pr;
+  int len;
+
+  assert(state);
+
+  pr = win_get_prop(win, sn.wm_atom[WmState], sn.wm_atom[WmState], &len);
+  *state = *(uint32_t *)xcb_get_property_value(pr);
+  xfree(pr);
+  return len > 0;
 }
 
 void win_stack(xcb_window_t win, pos_t p)
