@@ -90,6 +90,7 @@ struct btnbind {
 
 static void args(int, char **);
 static void setup(void);
+static void scan(void);
 static void run(void);
 static void cleanup(void);
 static void atom_setup(void);
@@ -244,6 +245,31 @@ void setup(void)
   fc = NULL;
   nsel = 0;
   running = true;
+}
+
+void scan(void)
+{
+  xcb_query_tree_cookie_t qtc;
+  xcb_query_tree_reply_t *qtr;
+  xcb_window_t *win;
+  uint8_t map_state;
+  bool override_redirect;
+  int i, nwin;
+
+  qtc = xcb_query_tree(sn.conn, sn.root);
+  qtr = xcb_query_tree_reply(sn.conn, qtc, NULL);
+  if (!qtr || !(win = xcb_query_tree_children(qtr)))
+    return;
+  nwin = xcb_query_tree_children_length(qtr);
+  for (i = 0; i < nwin; i++) {
+    LOGV("scanning %d\n", win[i])
+    win_get_attr(win[i], &override_redirect, &map_state);
+    if (override_redirect || map_state == XCB_MAP_STATE_UNMAPPED)
+      continue;
+    cln_manage(win[i]);
+  }
+  xfree(qtr);
+  xcb_flush(sn.conn);
 }
 
 void run(void)
@@ -473,7 +499,7 @@ void on_focus_in(xcb_generic_event_t *ge)
 void on_expose(xcb_generic_event_t *ge)
 {
   xcb_expose_event_t *e = (xcb_expose_event_t *)ge;
-  client_t *c = cln_from_frame(e->window);
+  client_t *c;
 
   if (e->window == fm->barwin)
     mon_draw_bar(fm);
@@ -520,20 +546,15 @@ void on_unmap_notify(xcb_generic_event_t *ge)
 void on_map_request(xcb_generic_event_t *ge)
 {
   xcb_map_request_event_t *e = (xcb_map_request_event_t *)ge;
-  xcb_get_window_attributes_cookie_t wac;
-  xcb_get_window_attributes_reply_t *war;
-  client_t *c = cln_from_tab(e->window);
+  client_t *c;
+  bool override_redirect;
   LOGV("on_map_request: %d\n", e->window)
 
-  wac = xcb_get_window_attributes(sn.conn, e->window);
-  war = xcb_get_window_attributes_reply(sn.conn, wac, NULL);
+  win_get_attr(e->window, &override_redirect, NULL);
 
-  if (!war || war->override_redirect) {
-    xfree(war);
+  if (override_redirect)
     return;
-  }
-  xfree(war);
-  if (!c) {
+  if (!(c = cln_from_tab(e->window))) {
     cln_manage(e->window);
     xcb_flush(sn.conn);
   }
@@ -737,8 +758,8 @@ void cln_manage(xcb_window_t win)
   cln_attach(c);
 
   xcb_map_window(sn.conn, win);
-  win_type = win_get_atom_prop(c->tab[c->ft], sn.net_atom[NetWmWindowType]);
-  if (win_type == sn.net_atom[NetWmWindowTypeDialog])
+  if (win_get_atom_prop(c->tab[c->ft], sn.net_atom[NetWmWindowType], &win_type)
+  &&  win_type == sn.net_atom[NetWmWindowTypeDialog])
     c->isfloating = true;
 
   if (c->isfloating) {
@@ -1516,6 +1537,7 @@ int main(int argc, char *argv[])
 {
   args(argc, argv);
   setup();
+  scan();
   run();
   cleanup();
   return EXIT_SUCCESS;
