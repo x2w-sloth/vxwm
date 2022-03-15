@@ -492,7 +492,7 @@ void on_focus_in(xcb_generic_event_t *ge)
 
   if ((c = cln_from_tab(e->event))) {
     cln_set_focus(c);
-    xcb_flush(sn.conn);
+    mon_draw_bar(fm);
   }
 }
 
@@ -676,10 +676,10 @@ void mon_draw_bar(monitor_t *m)
 {
   const color_t fg = 0xCCCCCC;
   const color_t bg = 0x333333;
-  int i, n, x, tw, pad = 28;
+  int i, n, x, tw, pad = 28, sw = sn.scr->width_in_pixels;
   LOGV("drawing status bar\n")
 
-  draw_rect_filled(0, 0, sn.scr->width_in_pixels, VXWM_BAR_H, bg);
+  draw_rect_filled(0, 0, sw, VXWM_BAR_H, bg);
 
   // draw page symbols
   n = LENGTH(pages);
@@ -703,6 +703,13 @@ void mon_draw_bar(monitor_t *m)
     tw += pad;
     draw_text(x, 0, tw, VXWM_BAR_H, m->lt_status, fg, pad / 2);
     x += tw;
+  }
+
+  // draw focus tab title
+  if (fc) {
+    x = MAX(x, sw / 2);
+    draw_text_extents(fc->name[fc->ft], &tw, NULL);
+    draw_text(x - tw / 2, 0, tw, VXWM_BAR_H, fc->name[fc->ft], fg, 0);
   }
 
   // draw root window title
@@ -794,6 +801,7 @@ void cln_unmanage(client_t *c)
   cln_delete(c);
   mon_arrange(fm);
   cln_set_focus(fb);
+  mon_draw_bar(fm);
 }
 
 void cln_set_border(client_t *c, int width)
@@ -1128,6 +1136,7 @@ void bn_kill_tab(UNUSED const arg_t *arg)
 
 void bn_swap_tab(const arg_t *arg)
 {
+  char buf[VXWM_TAB_NAME_BUF];
   int swp = -1;
 
   if (!fc || fc->nt == 1)
@@ -1154,6 +1163,9 @@ void bn_swap_tab(const arg_t *arg)
   }
   SWAP_BITS(fc->sel, swp, fc->ft);
   SWAP(fc->tab[swp], fc->tab[fc->ft])
+  memcpy(buf, fc->name[swp], VXWM_TAB_NAME_BUF);
+  memcpy(fc->name[swp], fc->name[fc->ft], VXWM_TAB_NAME_BUF);
+  memcpy(fc->name[fc->ft], buf, VXWM_TAB_NAME_BUF);
   bn_focus_tab(arg);
 }
 
