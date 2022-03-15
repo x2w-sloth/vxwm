@@ -61,7 +61,6 @@ void draw_setup(void)
   uint32_t scrw = sn.scr->width_in_pixels, scrh = sn.scr->height_in_pixels;
   uint32_t val = 0;
   xcb_visualtype_t *vt;
-  cairo_font_extents_t fe;
 
   // setup xcb graphics context and pixmap buffer
   gc = xcb_generate_id(sn.conn);
@@ -75,13 +74,6 @@ void draw_setup(void)
   if (cairo_surface_status(surface) != CAIRO_STATUS_SUCCESS)
     die("failed to allocate surface on pixmap");
   cr = cairo_create(surface);
-
-  // initialize font
-  cairo_select_font_face(cr, "monospace", CAIRO_FONT_SLANT_NORMAL, CAIRO_FONT_WEIGHT_NORMAL);
-  cairo_set_font_size(cr, 20);
-  cairo_font_extents(cr, &fe);
-  font_height = fe.height;
-  font_descent = fe.descent;
 }
 
 void draw_cleanup(void)
@@ -90,6 +82,21 @@ void draw_cleanup(void)
   cairo_surface_destroy(surface);
   xcb_free_pixmap(sn.conn, pixmap);
   xcb_free_gc(sn.conn, gc);
+}
+
+// @param height stores the recommended height for a row of text given the font size
+void draw_select_font(const char *face, int size, int *height)
+{
+  cairo_font_extents_t fe;
+
+  cairo_select_font_face(cr, face, CAIRO_FONT_SLANT_NORMAL, CAIRO_FONT_WEIGHT_NORMAL);
+  cairo_set_font_size(cr, size);
+  cairo_font_extents(cr, &fe);
+  font_height = fe.height;
+  font_descent = fe.descent;
+  if (height)
+    *height = (int)font_height;
+  LOGV("selected font %s:%d (suggest row height %d)\n", face, size, (int)font_height)
 }
 
 void draw_copy(xcb_drawable_t dst, int x, int y, int w, int h)

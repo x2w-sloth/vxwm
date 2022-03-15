@@ -11,7 +11,8 @@
 #define VXWM_TAB_NORMAL_CLR   VXWM_CLN_NORMAL_CLR
 #define VXWM_TAB_FOCUS_CLR    VXWM_CLN_FOCUS_CLR
 #define VXWM_TAB_SELECT_CLR   0xFFA500
-#define VXWM_BAR_H            32
+#define VXWM_FONT             "monospace"
+#define VXWM_FONT_SIZE        22
 
 static page_t pages[] = {
   { "1", column, {  3, -1, -1 } },

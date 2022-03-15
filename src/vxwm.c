@@ -39,6 +39,7 @@ struct monitor {
   int np, fp;          // number of pages, index of focus page
   int lx, ly, lw, lh;  // layout space where tiled clients are arranged in
   xcb_window_t barwin; // status bar window
+  int barh;            // status bar height
   char lt_status[VXWM_LT_STATUS_BUF]; // layout status buffer
 };
 
@@ -171,6 +172,7 @@ static bool running;
 static int ptr_x, ptr_y;
 static int win_x, win_y, win_w, win_h;
 static int nsel;
+static int barh;
 static uint32_t vals[8], masks;
 static char root_name[VXWM_ROOT_NAME_BUF];
 static const handler_t handler[XCB_NO_OPERATION] = {
@@ -227,10 +229,11 @@ void setup(void)
     die("another window manager is running\n");
   LOGV("configured root window %d\n", sn.root)
 
-  // setup monitors, initialize drawing context and atoms
-  fm = mon_create();
+  // initialize drawing context and atoms, setup monitor
   draw_setup();
+  draw_select_font(VXWM_FONT, VXWM_FONT_SIZE, &barh);
   atom_setup();
+  fm = mon_create();
 
   // load symbols and grab keys on root window
   symbols = xcb_key_symbols_alloc(sn.conn);
@@ -614,15 +617,16 @@ monitor_t *mon_create(void)
   m->lx = 0;
   m->ly = 0;
   m->lw = sn.scr->width_in_pixels - m->lx;
-  m->lh = sn.scr->height_in_pixels - m->ly - VXWM_BAR_H;
+  m->lh = sn.scr->height_in_pixels - m->ly - barh;
   m->barwin = xcb_generate_id(sn.conn);
+  m->barh = barh;
   memset(m->lt_status, 0, VXWM_LT_STATUS_BUF);
 
   masks = XCB_CW_OVERRIDE_REDIRECT | XCB_CW_EVENT_MASK;
   vals[0] = 1;
   vals[1] = XCB_EVENT_MASK_EXPOSURE;
   xcb_create_window(sn.conn, sn.scr->root_depth, m->barwin, sn.root,
-                    0, m->lh, sn.scr->width_in_pixels, VXWM_BAR_H, 0,
+                    0, m->lh, sn.scr->width_in_pixels, barh, 0,
                     XCB_WINDOW_CLASS_INPUT_OUTPUT, sn.scr->root_visual, masks, vals);
   xcb_map_window(sn.conn, m->barwin);
   return m;
@@ -679,7 +683,7 @@ void mon_draw_bar(monitor_t *m)
   int i, n, x, tw, pad = 28, sw = sn.scr->width_in_pixels;
   LOGV("drawing status bar\n")
 
-  draw_rect_filled(0, 0, sw, VXWM_BAR_H, bg);
+  draw_rect_filled(0, 0, sw, fm->barh, bg);
 
   // draw page symbols
   n = LENGTH(pages);
@@ -687,10 +691,10 @@ void mon_draw_bar(monitor_t *m)
     draw_text_extents(pages[i].sym, &tw, NULL);
     tw += pad;
     if (i == m->fp) {
-      draw_rect_filled(x, 0, tw, VXWM_BAR_H, fg);
-      draw_text(x, 0, tw, VXWM_BAR_H, pages[i].sym, bg, pad / 2);
+      draw_rect_filled(x, 0, tw, fm->barh, fg);
+      draw_text(x, 0, tw, fm->barh, pages[i].sym, bg, pad / 2);
     } else {
-      draw_text(x, 0, tw, VXWM_BAR_H, pages[i].sym, fg, pad / 2);
+      draw_text(x, 0, tw, fm->barh, pages[i].sym, fg, pad / 2);
       if (fc && (LSB(i) & fc->tag))
         draw_rect_filled(x + 5, 5, 5, 5, fg);
     }
@@ -701,7 +705,7 @@ void mon_draw_bar(monitor_t *m)
   if (m->lt_status[0]) {
     draw_text_extents(m->lt_status, &tw, NULL);
     tw += pad;
-    draw_text(x, 0, tw, VXWM_BAR_H, m->lt_status, fg, pad / 2);
+    draw_text(x, 0, tw, fm->barh, m->lt_status, fg, pad / 2);
     x += tw;
   }
 
@@ -709,18 +713,18 @@ void mon_draw_bar(monitor_t *m)
   if (fc) {
     x = MAX(x, sw / 2);
     draw_text_extents(fc->name[fc->ft], &tw, NULL);
-    draw_text(x - tw / 2, 0, tw, VXWM_BAR_H, fc->name[fc->ft], fg, 0);
+    draw_text(x - tw / 2, 0, tw, fm->barh, fc->name[fc->ft], fg, 0);
   }
 
   // draw root window title
   draw_text_extents(root_name, &tw, NULL);
   tw += pad;
   x = sn.scr->width_in_pixels - tw;
-  draw_rect_filled(x, 0, tw, VXWM_BAR_H, fg);
-  draw_arc_filled(x, VXWM_BAR_H/2, VXWM_BAR_H/2., 90, 270, fg);
-  draw_text(x, 0, tw, VXWM_BAR_H, root_name, bg, pad / 2);
+  draw_rect_filled(x, 0, tw, fm->barh, fg);
+  draw_arc_filled(x, fm->barh/2, fm->barh/2., 90, 270, fg);
+  draw_text(x, 0, tw, fm->barh, root_name, bg, pad / 2);
 
-  draw_copy(m->barwin, 0, 0, sn.scr->width_in_pixels, VXWM_BAR_H);
+  draw_copy(m->barwin, 0, 0, sn.scr->width_in_pixels, fm->barh);
 }
 
 client_t *cln_create()

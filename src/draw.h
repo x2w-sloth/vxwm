@@ -10,6 +10,7 @@ typedef uint32_t color_t;
 
 void draw_setup(void);
 void draw_cleanup(void);
+void draw_select_font(const char *face, int size, int *height);
 void draw_copy(xcb_drawable_t dst, int x, int y, int w, int h);
 void draw_rect(int x, int y, int w, int h, color_t clr, double lw);
 void draw_rect_filled(int x, int y, int w, int h, color_t clr);
