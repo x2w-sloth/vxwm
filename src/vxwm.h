@@ -11,7 +11,7 @@
 #define VXWM_VERSION_PATCH    "0"
 #define VXWM_VERSION          VXWM_VERSION_MAJOR "." \
                               VXWM_VERSION_MINOR "." \
-                              VXWM_VERSION_PATCH "-alpha"
+                              VXWM_VERSION_PATCH
 
 #include <xcb/xproto.h>
 
