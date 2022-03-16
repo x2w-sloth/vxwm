@@ -33,6 +33,8 @@ sudo make install
 
 For people using `startx`, simply add `exec vxwm` to the end of `~/.xinitrc`.
 
+Uninstall with `sudo make uninstall`
+
 ## Configuration
 
 Settings can be found and customized in `src/config.h`.
@@ -41,7 +43,7 @@ For the new config to take effect please recompile and install with `make instal
 
 ## Disclaimer
 
-This project is in early-development and many key features are still being implemented, feel free to open issues or send pull requests. Development is done in branch `dev` and merged into `master` when new features or bug fixes are ready.
+This project is in early-development and many key features are still being implemented, feel free to open discussions, issues or send pull requests.
 
 ## License
 
