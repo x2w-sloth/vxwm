@@ -33,7 +33,7 @@ sudo make install
 
 For people using `startx`, simply add `exec vxwm` to the end of `~/.xinitrc`.
 
-Uninstall with `sudo make uninstall`
+Uninstall anytime with `sudo make uninstall`
 
 ## Configuration
 
