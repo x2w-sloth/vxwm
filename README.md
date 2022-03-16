@@ -5,10 +5,13 @@ vxwm is a non-compositing tiling window manager for the X window system. It aims
 
 The default mod key is the windows key, below are some core key bindings to get started.
 
+A vxwm client consists of one or more tabs, they can be split or merged arbitrarily to fit your workflow.
+
 | Key Bind | Function |
 | -------- | -------- |
-| mod + enter | spawns a terminal, by default this is [st](https://git.suckless.org/st/) from suckless.org |
-| mod + q | kills a tab, a vxwm client consists of one or more tabs. |
+| mod + enter | spawns a terminal, by default this is xterm
+| mod + shift + enter | spawns a menu prompt, by default this is [dmenu](https://git.suckless.org/st/) from suckless.org |
+| mod + q | kills current tab in client. |
 | mod + k | focus previous client. |
 | mod + j | focus next client. |
 | mod + h | focus previous tab in current client. |

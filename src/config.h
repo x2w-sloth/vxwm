@@ -6,7 +6,7 @@
 
 #define VXWM_CLN_BORDER_W     4
 #define VXWM_CLN_NORMAL_CLR   0x6B6B6B 
-#define VXWM_CLN_FOCUS_CLR    0x00FFFF 
+#define VXWM_CLN_FOCUS_CLR    0xCCCCCC 
 #define VXWM_TAB_HEIGHT       8
 #define VXWM_TAB_NORMAL_CLR   VXWM_CLN_NORMAL_CLR
 #define VXWM_TAB_FOCUS_CLR    VXWM_CLN_FOCUS_CLR
@@ -19,7 +19,8 @@ static page_t pages[] = {
   { "2", stack,  {  2, -1, -1 } },
 };
 
-static const char *termcmd[] = { "st", NULL };
+static const char *menucmd[] = { "dmenu_run", NULL };
+static const char *termcmd[] = { "xterm", NULL };
 
 static int incp0[2] = { 0, +1 };
 static int decp0[2] = { 0, -1 };
@@ -28,6 +29,7 @@ static int decp1[2] = { 1, -1 };
 
 static keybind_t keybinds[] = {
   { MOD|CTRL,    XK_q,       bn_quit,           { .v = NULL } },
+  { MOD|SHIFT,   XK_Return,  bn_spawn,          { .v = menucmd } },
   { MOD,         XK_Return,  bn_spawn,          { .v = termcmd } },
   { MOD,         XK_m,       bn_merge_cln,      { .p = This } },
   { MOD,         XK_comma,   bn_split_cln,      { .v = NULL } },
