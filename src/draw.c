@@ -38,7 +38,7 @@ xcb_visualtype_t *get_visual_type(xcb_screen_t *scr)
   return vt;
 }
 
-inline
+INLINE
 void draw_set_color(color_t clr)
 {
   if (source_clr != clr) {
@@ -47,7 +47,7 @@ void draw_set_color(color_t clr)
   }
 }
 
-inline
+INLINE
 void draw_set_line_width(double lw)
 {
   if (source_lw != lw) {

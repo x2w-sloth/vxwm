@@ -24,7 +24,7 @@
 
 #ifdef __GNUC__
 #  define UNUSED                   __attribute__((unused))
-#  define INLINE                   __attribute__((always_inline))
+#  define INLINE                   __attribute__((always_inline)) inline
 #else
 #  define UNUSED
 #  define INLINE                   inline

@@ -891,6 +891,7 @@ void cln_set_focus(client_t *c)
   }
 }
 
+INLINE
 void cln_raise(client_t *c)
 {
   win_stack(c->frame, Top);
@@ -998,6 +999,7 @@ void cln_resize(client_t *c, int w, int h)
   cln_draw_tabs(c);
 }
 
+INLINE
 void cln_move_resize(client_t *c, int x, int y, int w, int h)
 {
   cln_move(c, x, y);
