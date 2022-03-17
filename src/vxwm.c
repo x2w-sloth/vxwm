@@ -375,6 +375,7 @@ void ptr_motion(ptr_state_t state)
 
   win_get_geometry(fc->frame, &win_x, &win_y, &win_w, &win_h, NULL);
 
+  ptr_first_motion = true;
   ptr_state = state; // see on_motion_notify
 }
 
@@ -434,10 +435,8 @@ void on_button_press(xcb_generic_event_t *ge)
 
   cln_set_focus(cln_from_frame(e->event));
   for (i = 0, n = LENGTH(btnbinds); i < n; i++)
-    if (e->detail == btnbinds[i].btn && e->state == btnbinds[i].mod && btnbinds[i].fn) {
-      ptr_first_motion = true;
+    if (e->detail == btnbinds[i].btn && e->state == btnbinds[i].mod && btnbinds[i].fn)
       btnbinds[i].fn(&btnbinds[i].arg);
-    }
 }
 
 void on_motion_notify(xcb_generic_event_t *ge)
@@ -446,12 +445,14 @@ void on_motion_notify(xcb_generic_event_t *ge)
   bool move_or_resize = ptr_state == PtrMoveCln;
   int dx, dy, xw, yh;
 
+  assert(fc);
   if (fc->isfullscr)
     return;
 
   if (ptr_first_motion) {
     ptr_first_motion = false;
     fc->isfloating = true;
+    cln_raise(fc);
     mon_arrange(fm);
   }
 
@@ -660,9 +661,7 @@ void mon_arrange(monitor_t *m)
       return;
     }
     // restack and count tiled clients in focus page
-    if (c->isfloating)
-      win_stack(c->frame, Top);
-    else {
+    if (!c->isfloating) {
       win_stack(c->frame, Bottom);
       arg.ntiled++;
     }
@@ -872,7 +871,6 @@ void cln_set_focus(client_t *c)
 
   // assign new focus client or loose focus
   if ((fc = c)) {
-    cln_raise(fc);
     xcb_change_window_attributes(sn.conn, fc->frame, XCB_CW_BORDER_PIXEL, &fclr);
     win_focus(fc->tab[fc->ft]);
     cln_draw_tabs(fc);
