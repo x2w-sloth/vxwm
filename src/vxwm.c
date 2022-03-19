@@ -121,7 +121,8 @@ static void cln_manage(xcb_window_t);
 static void cln_delete(client_t *);
 static void cln_unmanage(client_t *);
 static void cln_set_border(client_t *, int);
-static void cln_add_frame(client_t *);
+static void cln_frame(client_t *);
+static void cln_unframe(client_t *);
 static void cln_attach(client_t *);
 static void cln_detach(client_t *);
 static void cln_set_focus(client_t *);
@@ -757,9 +758,7 @@ client_t *cln_create()
   c->h = c->ph = VXWM_CLN_MIN_H;
   memset(c->name, 0, VXWM_TAB_NAME_BUF);
 
-  cln_add_frame(c);
-  xcb_map_window(sn.conn, c->frame);
-  LOGI("created client frame: %d\n", c->frame)
+  cln_frame(c);
   return c;
 }
 
@@ -794,10 +793,8 @@ void cln_manage(xcb_window_t win)
 
 void cln_delete(client_t *c)
 {
-  xcb_unmap_window(sn.conn, c->frame);
-  xcb_destroy_window(sn.conn, c->frame);
+  cln_unframe(c);
   xcb_flush(sn.conn);
-  LOGI("destroy frame: %d\n", c->frame)
   xfree(c->tab);
   xfree(c->name);
   xfree(c);
@@ -822,21 +819,21 @@ void cln_set_border(client_t *c, int width)
   xcb_configure_window(sn.conn, c->frame, masks, &width);
 }
 
-void cln_add_frame(client_t *c)
+void cln_frame(client_t *c)
 {
-  uint32_t bw = 3, bp = VXWM_CLN_NORMAL_CLR;
   int i, n;
 
+  masks = XCB_CW_BORDER_PIXEL |
+          XCB_CW_OVERRIDE_REDIRECT |
+          XCB_CW_EVENT_MASK;
+  vals[0] = VXWM_CLN_NORMAL_CLR;
+  vals[1] = true;
+  vals[2] = VXWM_FRAME_EVENT_MASK;
   c->frame = xcb_generate_id(sn.conn);
   xcb_create_window(sn.conn, sn.scr->root_depth,
-                    c->frame, sn.root, 0, 0, 1, 1, bw,
-                    XCB_WINDOW_CLASS_INPUT_OUTPUT,
-                    sn.scr->root_visual, XCB_CW_BORDER_PIXEL, &bp);
-
-  vals[0] = VXWM_FRAME_EVENT_MASK;
-  xcb_change_window_attributes(sn.conn, c->frame, XCB_CW_EVENT_MASK, vals);
-
-  cln_set_border(c, VXWM_CLN_BORDER_W);
+                    c->frame, sn.root, 0, 0, VXWM_CLN_MIN_W, VXWM_CLN_MIN_H,
+                    VXWM_CLN_BORDER_W, XCB_WINDOW_CLASS_INPUT_OUTPUT,
+                    sn.scr->root_visual, masks, vals);
 
   masks = XCB_EVENT_MASK_BUTTON_PRESS |
           XCB_EVENT_MASK_BUTTON_RELEASE |
@@ -844,6 +841,15 @@ void cln_add_frame(client_t *c)
   for (i = 0, n = LENGTH(btnbinds); i < n; i++)
     xcb_grab_button(sn.conn, 0, c->frame, masks, XCB_GRAB_MODE_ASYNC, XCB_GRAB_MODE_ASYNC,
                     XCB_NONE, XCB_NONE, btnbinds[i].btn, btnbinds[i].mod);
+  xcb_map_window(sn.conn, c->frame);
+  LOGV("created client frame: %d\n", c->frame)
+}
+
+void cln_unframe(client_t *c)
+{
+  xcb_unmap_window(sn.conn, c->frame);
+  xcb_destroy_window(sn.conn, c->frame);
+  LOGV("destroyed client frame: %d\n", c->frame)
 }
 
 void cln_attach(client_t *c)
