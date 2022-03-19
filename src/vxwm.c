@@ -30,7 +30,8 @@
                                  XCB_EVENT_MASK_ENTER_WINDOW)
 
 #define VXWM_WIN_EVENT_MASK     (XCB_EVENT_MASK_STRUCTURE_NOTIFY |\
-                                 XCB_EVENT_MASK_FOCUS_CHANGE)
+                                 XCB_EVENT_MASK_FOCUS_CHANGE |\
+                                 XCB_EVENT_MASK_PROPERTY_CHANGE)
 
 // a monitor corresponds to a physical display and contains pages
 struct monitor {
@@ -133,6 +134,7 @@ static void cln_show_hide(monitor_t *);
 static void cln_set_tag(client_t *, uint32_t, bool);
 static void cln_attach_tab(client_t *, xcb_window_t);
 static void cln_detach_tab(client_t *, xcb_window_t);
+static void cln_update_title(client_t *, xcb_window_t);
 static void cln_draw_tabs(client_t *);
 static client_t *next_inpage(client_t *);
 static client_t *prev_inpage(client_t *);
@@ -597,11 +599,18 @@ void on_configure_request(xcb_generic_event_t *ge)
 void on_property_notify(xcb_generic_event_t *ge)
 {
   xcb_property_notify_event_t *e = (xcb_property_notify_event_t *)ge;
+  client_t *c;
   LOGV("on_property_notify: %d @ %d\n", e->window, e->sequence)
 
   if (e->window == sn.root && e->atom == XCB_ATOM_WM_NAME) {
     win_get_text_prop(sn.root, XCB_ATOM_WM_NAME, root_name, VXWM_ROOT_NAME_BUF);
     mon_draw_bar(fm);
+  } else if ((c = cln_from_tab(e->window))) {
+    if (e->atom == XCB_ATOM_WM_NAME || e->atom == sn.net_atom[NetWmName]) {
+      cln_update_title(c, e->window);
+      if (c == fc)
+        mon_draw_bar(fm);
+    }
   }
   xcb_flush(sn.conn);
 }
@@ -916,10 +925,8 @@ void cln_attach_tab(client_t *c, xcb_window_t win)
     c->name = xrealloc(c->name, VXWM_TAB_NAME_BUF * c->tcap);
   }
 
-  c->tab[c->nt] = win;
-  if (!win_get_text_prop(win, sn.net_atom[NetWmName], c->name[c->nt], VXWM_TAB_NAME_BUF))
-    win_get_text_prop(win, XCB_ATOM_WM_NAME, c->name[c->nt], VXWM_TAB_NAME_BUF);
-  c->nt++;
+  c->tab[c->nt++] = win;
+  cln_update_title(c, win);
 
   // If the window is already mapped and has the structure notify event mask,
   // then reparenting generates an unmap notify on the reparented window.
@@ -953,6 +960,17 @@ void cln_detach_tab(client_t *c, xcb_window_t win)
     c->tab[i] = c->tab[i + 1];
   c->nt--;
   c->ft = MAX(c->ft - 1, 0);
+}
+
+void cln_update_title(client_t *c, xcb_window_t win)
+{
+  int i;
+
+  for (i = 0; c->tab[i] != win && i < c->nt; i++) ;
+  assert(i != c->nt);
+
+  if (!win_get_text_prop(win, sn.net_atom[NetWmName], c->name[i], VXWM_TAB_NAME_BUF))
+    win_get_text_prop(win, XCB_ATOM_WM_NAME, c->name[i], VXWM_TAB_NAME_BUF);
 }
 
 void cln_draw_tabs(client_t *c)
