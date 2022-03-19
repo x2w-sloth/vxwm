@@ -195,7 +195,7 @@ static const handler_t handler[XCB_NO_OPERATION] = {
   [XCB_MAP_REQUEST] = on_map_request,
   [XCB_CONFIGURE_REQUEST] = on_configure_request,
   [XCB_PROPERTY_NOTIFY] = on_property_notify,
-  [XCB_CLIENT_MESSAGE]  = on_client_message,
+  [XCB_CLIENT_MESSAGE] = on_client_message,
 //[XCB_MAPPING_NOTIFY]  = on_mapping_notify,
 };
 session_t sn; // global session instance
@@ -637,7 +637,8 @@ void on_client_message(xcb_generic_event_t *ge)
         e->data.data32[2] == sn.net_atom[NetWmStateFullscreen]) {
       state = e->data.data32[0] == NET_WM_STATE_ADD ||
              (e->data.data32[0] == NET_WM_STATE_TOGGLE && !c->isfullscr);
-      c->isfullscr = state;
+      if (!(c->isfullscr = state))
+        cln_set_fullscr(fc, false);
       mon_arrange(fm);
       cln_set_focus(c);
     }
@@ -1319,11 +1320,9 @@ void bn_toggle_fullscr(UNUSED const arg_t *arg)
   if (!fc)
     return;
 
-  if (fc->isfullscr) {
+  if (fc->isfullscr)
     cln_set_fullscr(fc, false);
-    fc->isfullscr = false;
-  } else
-    fc->isfullscr = true;
+  fc->isfullscr = !fc->isfullscr;
   cln_set_focus(NULL);
   mon_arrange(fm);
   cln_set_focus(pf);
