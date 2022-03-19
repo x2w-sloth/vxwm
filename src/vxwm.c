@@ -33,6 +33,10 @@
                                  XCB_EVENT_MASK_FOCUS_CHANGE |\
                                  XCB_EVENT_MASK_PROPERTY_CHANGE)
 
+#define NET_WM_STATE_REMOVE      0
+#define NET_WM_STATE_ADD         1
+#define NET_WM_STATE_TOGGLE      2
+
 // a monitor corresponds to a physical display and contains pages
 struct monitor {
   monitor_t *next;     // monitor linked list
@@ -112,6 +116,7 @@ static void on_unmap_notify(xcb_generic_event_t *);
 static void on_map_request(xcb_generic_event_t *);
 static void on_configure_request(xcb_generic_event_t *);
 static void on_property_notify(xcb_generic_event_t *);
+static void on_client_message(xcb_generic_event_t *);
 static monitor_t *mon_create(void);
 static void mon_delete(monitor_t *);
 static void mon_arrange(monitor_t *);
@@ -190,7 +195,7 @@ static const handler_t handler[XCB_NO_OPERATION] = {
   [XCB_MAP_REQUEST] = on_map_request,
   [XCB_CONFIGURE_REQUEST] = on_configure_request,
   [XCB_PROPERTY_NOTIFY] = on_property_notify,
-//[XCB_CLIENT_MESSAGE]  = on_client_message,
+  [XCB_CLIENT_MESSAGE]  = on_client_message,
 //[XCB_MAPPING_NOTIFY]  = on_mapping_notify,
 };
 session_t sn; // global session instance
@@ -320,6 +325,8 @@ void atom_setup(void)
   wm_cookies[WmDeleteWindow] = ATOM("WM_DELETE_WINDOW");
   wm_cookies[WmState]        = ATOM("WM_STATE");
   net_cookies[NetWmName]     = ATOM("_NET_WM_NAME");
+  net_cookies[NetWmState]    = ATOM("_NET_WM_STATE");
+  net_cookies[NetWmStateFullscreen] = ATOM("_NET_WM_STATE_FULLSCREEN");
   net_cookies[NetWmWindowType] = ATOM("_NET_WM_WINDOW_TYPE");
   net_cookies[NetWmWindowTypeDialog] = ATOM("_NET_WM_WINDOW_TYPE_DIALOG");
 
@@ -616,6 +623,28 @@ void on_property_notify(xcb_generic_event_t *ge)
   xcb_flush(sn.conn);
 }
 
+void on_client_message(xcb_generic_event_t *ge)
+{
+  xcb_client_message_event_t *e = (xcb_client_message_event_t *)ge;
+  client_t *c;
+  bool state;
+  LOGV("on_client_message: %d @ %d\n", e->window, e->sequence)
+
+  if (!(c = cln_from_tab(e->window)))
+    return;
+  if (e->type == sn.net_atom[NetWmState]) {
+    if (e->data.data32[1] == sn.net_atom[NetWmStateFullscreen] ||
+        e->data.data32[2] == sn.net_atom[NetWmStateFullscreen]) {
+      state = e->data.data32[0] == NET_WM_STATE_ADD ||
+             (e->data.data32[0] == NET_WM_STATE_TOGGLE && !c->isfullscr);
+      c->isfullscr = state;
+      mon_arrange(fm);
+      cln_set_focus(c);
+    }
+    xcb_flush(sn.conn);
+  }
+}
+
 monitor_t *mon_create(void)
 {
   monitor_t *m;
@@ -776,8 +805,8 @@ void cln_manage(xcb_window_t win)
   cln_attach(c);
 
   xcb_map_window(sn.conn, win);
-  if (win_get_atom_prop(c->tab[c->ft], sn.net_atom[NetWmWindowType], &win_type)
-  &&  win_type == sn.net_atom[NetWmWindowTypeDialog])
+  if (win_get_atom_prop(c->tab[c->ft], sn.net_atom[NetWmWindowType], &win_type) &&
+      win_type == sn.net_atom[NetWmWindowTypeDialog])
     c->isfloating = true;
 
   if (c->isfloating) {

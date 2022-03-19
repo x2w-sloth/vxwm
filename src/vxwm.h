@@ -41,6 +41,8 @@ enum {
 
 enum {
   NetWmName = 0,
+  NetWmState,
+  NetWmStateFullscreen,
   NetWmWindowType,
   NetWmWindowTypeDialog,
   NetAtomsLast,
