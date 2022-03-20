@@ -166,6 +166,23 @@ void win_send_proto(xcb_window_t win, xcb_atom_t proto)
   xcb_send_event(sn.conn, false, win, XCB_EVENT_MASK_NO_EVENT, (const char *)&msg);
 }
 
+void win_send_configure(xcb_window_t win, int x, int y, int w, int h, int bw)
+{
+  xcb_configure_notify_event_t notify;
+
+  notify.response_type = XCB_CONFIGURE_NOTIFY;
+  notify.event = win;
+  notify.window = win;
+  notify.above_sibling = XCB_NONE;
+  notify.x = (int16_t)x;
+  notify.y = (int16_t)y;
+  notify.width = (uint16_t)w;
+  notify.height = (uint16_t)h;
+  notify.border_width = (uint16_t)bw;
+  notify.override_redirect = false;
+  xcb_send_event(sn.conn, false, win, XCB_EVENT_MASK_STRUCTURE_NOTIFY, (const char *)&notify);
+}
+
 /// If the window supports WM_DELETE_WINDOW protocol, send a client message to it.
 /// Otherwise kill it directly from our side.
 void win_kill(xcb_window_t win)

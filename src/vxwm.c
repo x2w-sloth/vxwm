@@ -1048,6 +1048,7 @@ void cln_resize(client_t *c, int w, int h)
   xcb_configure_window(sn.conn, c->frame, masks, vals);
   vals[1] = c->h - VXWM_TAB_HEIGHT;
   xcb_configure_window(sn.conn, c->tab[c->ft], masks, vals);
+  win_send_configure(c->tab[c->ft], 0, 0, vals[0], vals[1], 0);
   cln_draw_tabs(c);
 }
 
@@ -1491,6 +1492,7 @@ void bn_focus_tab(const arg_t *arg)
   vals[0] = fc->w;
   vals[1] = fc->h - VXWM_TAB_HEIGHT;
   xcb_configure_window(sn.conn, win, masks, vals);
+  win_send_configure(win, 0, 0, vals[0], vals[1], 0);
 
   // raise tab window and redraw client tabs
   win_stack(win, Top);

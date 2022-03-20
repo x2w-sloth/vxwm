@@ -17,6 +17,7 @@ void win_focus(xcb_window_t);
 void win_set_state(xcb_window_t, uint32_t);
 bool win_has_proto(xcb_window_t, xcb_atom_t);
 void win_send_proto(xcb_window_t, xcb_atom_t);
+void win_send_configure(xcb_window_t, int, int, int, int, int);
 void win_kill(xcb_window_t);
 
 #endif // VXWM_WIN_H
