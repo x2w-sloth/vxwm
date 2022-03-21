@@ -1326,7 +1326,8 @@ void bn_toggle_fullscr(UNUSED const arg_t *arg)
   fc->isfullscr = !fc->isfullscr;
   cln_set_focus(NULL);
   mon_arrange(fm);
-  cln_set_focus(pf);
+  if (fc == NULL)
+    cln_set_focus(pf);
 }
 
 void bn_merge_cln(const arg_t *arg)
@@ -1519,7 +1520,8 @@ void bn_focus_page(const arg_t *arg)
   cln_set_focus(NULL);
   mon_arrange(fm);
   // TODO: cache the last focused client before switching pages
-  cln_set_focus(next_inpage(fm->cln));
+  if (fc == NULL)
+    cln_set_focus(next_inpage(fm->cln));
   mon_draw_bar(fm);
 }
 
