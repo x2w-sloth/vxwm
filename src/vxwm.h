@@ -36,7 +36,7 @@ enum {
   WmTakeFocus,
   WmDeleteWindow,
   WmState,
-  WmAtomsLast,
+  WmAtomsCount,
 };
 
 enum {
@@ -45,15 +45,15 @@ enum {
   NetWmStateFullscreen,
   NetWmWindowType,
   NetWmWindowTypeDialog,
-  NetAtomsLast,
+  NetAtomsCount,
 };
 
 typedef struct session {
   xcb_connection_t *conn;
   xcb_screen_t *scr;
   xcb_window_t root;
-  xcb_atom_t wm_atom[WmAtomsLast];
-  xcb_atom_t net_atom[NetAtomsLast];
+  xcb_atom_t wm_atom[WmAtomsCount];
+  xcb_atom_t net_atom[NetAtomsCount];
 } session_t;
 
 extern session_t sn;

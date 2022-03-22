@@ -1,5 +1,5 @@
 CFLAGS  := -Wall -Wextra -Wpedantic -std=c17 -O2
-LDFLAGS := `pkg-config --libs xcb xcb-keysyms xcb-icccm cairo`
+LDFLAGS := `pkg-config --libs xcb xcb-keysyms xcb-icccm xcb-aux xcb-cursor cairo`
 SRCDIR  := src
 INSDIR  := /usr/local/bin
 SRC     := $(wildcard $(SRCDIR)/*.c)

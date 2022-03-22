@@ -3,9 +3,12 @@
 #include <stdbool.h>
 #include <unistd.h>
 #include <X11/keysym.h>
+#include <X11/cursorfont.h>
 #include <xcb/xcb.h>
-#include <xcb/xcb_keysyms.h>
 #include <xcb/xproto.h>
+#include <xcb/xcb_cursor.h>
+#include <xcb/xcb_keysyms.h>
+#include <xcb/xcb_aux.h>
 #include <xcb/xcb_event.h>
 #include <xcb/xcb_icccm.h>
 #include "vxwm.h"
@@ -94,12 +97,19 @@ struct btnbind {
   arg_t arg;
 };
 
+typedef enum {
+  CursorNormal = 0,
+  CursorCount,
+} cursor_t;
+
 static void args(int, char **);
 static void setup(void);
 static void scan(void);
 static void run(void);
 static void cleanup(void);
 static void atom_setup(void);
+static void cursor_setup(void);
+static void cursor_cleanup(void);
 static xcb_keycode_t *keysym_to_keycodes(xcb_keysym_t);
 static xcb_keysym_t keycode_to_keysym(xcb_keycode_t);
 static void grab_keys(void);
@@ -171,6 +181,8 @@ static void bn_set_layout(const arg_t *);
 static void column(const layout_arg_t *);
 static void stack(const layout_arg_t *);
 
+static xcb_cursor_context_t *cursor_ctx;
+static xcb_cursor_t cursor[CursorCount];
 static xcb_key_symbols_t *symbols;
 static monitor_t *fm;
 static client_t *fc;
@@ -218,12 +230,13 @@ void setup(void)
 {
   xcb_void_cookie_t cookie;
   xcb_generic_error_t *error;
+  int screen_id;
 
   // connect to X server
-  sn.conn = xcb_connect(NULL, NULL);
+  sn.conn = xcb_connect(NULL, &screen_id);
   if (!sn.conn || xcb_connection_has_error(sn.conn))
     die("failed to connect to x server\n");
-  sn.scr = xcb_setup_roots_iterator(xcb_get_setup(sn.conn)).data;
+  sn.scr = xcb_aux_get_screen(sn.conn, screen_id);
   if (!sn.scr)
     die("failed to capture screen\n");
 
@@ -237,10 +250,11 @@ void setup(void)
     die("another window manager is running\n");
   LOGV("configured root window %d\n", sn.root)
 
-  // initialize drawing context and atoms, setup monitor
+  // initialize drawing context, atoms, and cursors
   draw_setup();
   draw_select_font(VXWM_FONT, VXWM_FONT_SIZE, &barh);
   atom_setup();
+  cursor_setup();
   fm = mon_create();
 
   // load symbols and grab keys on root window
@@ -302,6 +316,7 @@ void cleanup(void)
   // TODO: kill remaining clients
 
   // free resources and disconnect
+  cursor_cleanup();
   draw_cleanup();
   mon_delete(fm);
   if (symbols)
@@ -314,8 +329,8 @@ void cleanup(void)
 #define ATOM(NAME) xcb_intern_atom(sn.conn, false, (uint16_t)strlen(NAME), NAME)
 void atom_setup(void)
 {
-  xcb_intern_atom_cookie_t wm_cookies[WmAtomsLast];
-  xcb_intern_atom_cookie_t net_cookies[NetAtomsLast];
+  xcb_intern_atom_cookie_t wm_cookies[WmAtomsCount];
+  xcb_intern_atom_cookie_t net_cookies[NetAtomsCount];
   xcb_intern_atom_reply_t *reply;
   int i;
 
@@ -330,19 +345,40 @@ void atom_setup(void)
   net_cookies[NetWmWindowType] = ATOM("_NET_WM_WINDOW_TYPE");
   net_cookies[NetWmWindowTypeDialog] = ATOM("_NET_WM_WINDOW_TYPE_DIALOG");
 
-  for (i = 0; i < WmAtomsLast; i++)
+  for (i = 0; i < WmAtomsCount; i++)
     if ((reply = xcb_intern_atom_reply(sn.conn, wm_cookies[i], NULL))) {
       sn.wm_atom[i] = reply->atom;
       xfree(reply);
     }
 
-  for (i = 0; i < NetAtomsLast; i++)
+  for (i = 0; i < NetAtomsCount; i++)
     if ((reply = xcb_intern_atom_reply(sn.conn, net_cookies[i], NULL))) {
       sn.net_atom[i] = reply->atom;
       xfree(reply);
     }
 }
 #undef ATOM
+
+void cursor_setup(void)
+{
+  static const char *cursor_fonts[CursorCount] = {
+    [CursorNormal] = "left_ptr",
+  };
+  int i;
+
+  if (xcb_cursor_context_new(sn.conn, sn.scr, &cursor_ctx) < 0)
+    die("failed to create cursor context\n");
+
+  for (i = 0; i < CursorCount; i++) 
+    cursor[i] = xcb_cursor_load_cursor(cursor_ctx, cursor_fonts[i]);
+  xcb_change_window_attributes(sn.conn, sn.root, XCB_CW_CURSOR, &cursor[CursorNormal]);
+}
+
+void cursor_cleanup(void)
+{
+  xcb_free_cursor(sn.conn, cursor[CursorNormal]);
+  xcb_cursor_context_free(cursor_ctx);
+}
 
 xcb_keycode_t *keysym_to_keycodes(xcb_keysym_t keysym)
 {
