@@ -41,6 +41,28 @@ Settings can be found and customized in `src/config.h`.
 
 For the new config to take effect please recompile and install with `make install` again.
 
+## Roadmap
+
+An overview of the direction of the project, for detailed changes between releases please refer to the changelog.
+
+Note that upcoming items are tentative and can be moved, added, changed, or discarded.
+
+### Upcoming
+- 0.4.X Multi-Monitor Support
+- 0.3.X Scratchpad Clients
+
+### In Progress
+- 0.2.X Theming and Appearance
+	- Status Bar
+	- Client Colors
+	- Client Rules
+	- Cursor Appearance
+
+### Done
+- 0.1.X Core Constructs
+	- Client Tabbing
+	- Pages and Layouts
+
 ## Disclaimer
 
 This project is in early-development and many key features are still being implemented, feel free to open discussions, issues or send pull requests.
