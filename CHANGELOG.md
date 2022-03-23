@@ -3,6 +3,13 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [v0.2.1] - 2022-03-23
+### Added
+- Cursor appearance changes when moving and resizing clients.
+
+### Fixed
+- Potential focus locking when moving a fullscreen client to another page with existing fullscreen client.
+
 ## [v0.2.0] - 2022-03-16
 ### Added
 - CHANGELOG.md
@@ -53,6 +60,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   - Merge: All selected tabs are merged into the current focused client.
   - Split: All selected tabs are splitted into single-tabbed clients.
 
+[v0.2.1]: https://github.com/x2w-sloth/vxwm/compare/v0.2.0...v0.2.1
 [v0.2.0]: https://github.com/x2w-sloth/vxwm/compare/v0.2.0-alpha...v0.2.0
 [v0.2.0-alpha]: https://github.com/x2w-sloth/vxwm/compare/v0.1.3...v0.2.0-alpha
 [v0.1.3]: https://github.com/x2w-sloth/vxwm/compare/v0.1.2...v0.1.3
