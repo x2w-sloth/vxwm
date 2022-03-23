@@ -10,7 +10,7 @@ A vxwm client consists of one or more tabs, they can be split or merged arbitrar
 | Key Bind | Function |
 | -------- | -------- |
 | mod + enter | spawns a terminal, by default this is xterm
-| mod + shift + enter | spawns a menu prompt, by default this is [dmenu](https://git.suckless.org/st/) from suckless.org |
+| mod + shift + enter | spawns a menu prompt, by default this is [dmenu](https://git.suckless.org/dmenu/) from suckless.org |
 | mod + q | kills current tab in client. |
 | mod + k | focus previous client. |
 | mod + j | focus next client. |
