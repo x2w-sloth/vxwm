@@ -25,12 +25,6 @@ typedef enum {
   Bottom
 } pos_t;
 
-typedef enum {
-  PtrUngrabbed = 0,
-  PtrMoveCln,
-  PtrResizeCln
-} ptr_state_t;
-
 enum {
   WmProtocols = 0,
   WmTakeFocus,

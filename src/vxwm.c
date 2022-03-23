@@ -99,6 +99,8 @@ struct btnbind {
 
 typedef enum {
   CursorNormal = 0,
+  CursorMove,
+  CursorResize,
   CursorCount,
 } cursor_t;
 
@@ -113,11 +115,12 @@ static void cursor_cleanup(void);
 static xcb_keycode_t *keysym_to_keycodes(xcb_keysym_t);
 static xcb_keysym_t keycode_to_keysym(xcb_keycode_t);
 static void grab_keys(void);
-static void ptr_motion(ptr_state_t);
+static void ptr_grab(cursor_t);
+static void ptr_motion(cursor_t);
+static void ptr_ungrab(void);
 static void grant_configure_request(xcb_configure_request_event_t *);
 static void on_key_press(xcb_generic_event_t *);
 static void on_button_press(xcb_generic_event_t *);
-static void on_motion_notify(xcb_generic_event_t *);
 static void on_enter_notify(xcb_generic_event_t *);
 static void on_focus_in(xcb_generic_event_t *);
 static void on_expose(xcb_generic_event_t *);
@@ -186,11 +189,7 @@ static xcb_cursor_t cursor[CursorCount];
 static xcb_key_symbols_t *symbols;
 static monitor_t *fm;
 static client_t *fc;
-static ptr_state_t ptr_state;
-static bool ptr_first_motion;
 static bool running;
-static int ptr_x, ptr_y;
-static int win_x, win_y, win_w, win_h;
 static int nsel;
 static int barh;
 static uint32_t vals[8], masks;
@@ -198,7 +197,7 @@ static char root_name[VXWM_ROOT_NAME_BUF];
 static const handler_t handler[XCB_NO_OPERATION] = {
   [XCB_KEY_PRESS] = on_key_press,
   [XCB_BUTTON_PRESS] = on_button_press,
-  [XCB_MOTION_NOTIFY] = on_motion_notify,
+//[XCB_MOTION_NOTIFY] = on_motion_notify,
   [XCB_ENTER_NOTIFY] = on_enter_notify,
   [XCB_FOCUS_IN] = on_focus_in,
   [XCB_EXPOSE] = on_expose,
@@ -266,7 +265,6 @@ void setup(void)
 
   // initialize status globals
   strncpy(root_name, "vxwm "VXWM_VERSION, VXWM_ROOT_NAME_BUF);
-  ptr_state = PtrUngrabbed;
   fc = NULL;
   nsel = 0;
   running = true;
@@ -363,6 +361,8 @@ void cursor_setup(void)
 {
   static const char *cursor_fonts[CursorCount] = {
     [CursorNormal] = "left_ptr",
+    [CursorMove]   = "fleur",
+    [CursorResize] = "sizing",
   };
   int i;
 
@@ -376,7 +376,10 @@ void cursor_setup(void)
 
 void cursor_cleanup(void)
 {
-  xcb_free_cursor(sn.conn, cursor[CursorNormal]);
+  int i;
+
+  for (i = 0; i < CursorCount; i++) 
+    xcb_free_cursor(sn.conn, cursor[i]);
   xcb_cursor_context_free(cursor_ctx);
 }
 
@@ -409,20 +412,76 @@ void grab_keys(void)
   }
 }
 
-void ptr_motion(ptr_state_t state)
+void ptr_grab(cursor_t cur)
 {
-  xcb_query_pointer_reply_t *ptr;
+  xcb_grab_pointer_cookie_t gpc;
+  xcb_grab_pointer_reply_t *gpr;
 
-  ptr = xcb_query_pointer_reply(sn.conn, xcb_query_pointer(sn.conn, sn.root), NULL);
-  assert(ptr && "did not receive a reply from query pointer");
-  ptr_x = ptr->root_x;
-  ptr_y = ptr->root_y;
-  xfree(ptr);
+  gpc = xcb_grab_pointer_unchecked(sn.conn, false, sn.root,
+                                   XCB_EVENT_MASK_BUTTON_PRESS |
+                                   XCB_EVENT_MASK_BUTTON_RELEASE |
+                                   XCB_EVENT_MASK_POINTER_MOTION,
+                                   XCB_GRAB_MODE_ASYNC, XCB_GRAB_MODE_ASYNC,
+                                   sn.root, cursor[cur], XCB_CURRENT_TIME);
+  gpr = xcb_grab_pointer_reply(sn.conn, gpc, NULL);
+  if (gpr)
+    xfree(gpr);
+}
 
-  win_get_geometry(fc->frame, &win_x, &win_y, &win_w, &win_h, NULL);
+void ptr_motion(cursor_t cur)
+{
+  xcb_query_pointer_reply_t *qpr;
+  xcb_generic_event_t *ge;
+  xcb_motion_notify_event_t *e;
+  xcb_timestamp_t prev_time = 0;
+  uint8_t type;
+  bool ptr_first_motion;
+  int wx, wy, ww, wh, px, py, dx, dy, xw, yh;
 
+  qpr = xcb_query_pointer_reply(sn.conn, xcb_query_pointer(sn.conn, sn.root), NULL);
+  assert(qpr && "did not receive a reply from query pointer");
+  px = qpr->root_x;
+  py = qpr->root_y;
+  xfree(qpr);
+
+  win_get_geometry(fc->frame, &wx, &wy, &ww, &wh, NULL);
   ptr_first_motion = true;
-  ptr_state = state; // see on_motion_notify
+
+  xcb_flush(sn.conn);
+  do {
+    ge = xcb_wait_for_event(sn.conn);
+    type = XCB_EVENT_RESPONSE_TYPE(ge);
+    switch (type) {
+      case XCB_MOTION_NOTIFY:
+        e = (xcb_motion_notify_event_t *)ge;
+        if (e->time - prev_time < 1000 / 60)
+          break;
+        prev_time = e->time;
+        if (ptr_first_motion) {
+          ptr_first_motion = false;
+          fc->isfloating = true;
+          cln_raise(fc);
+          mon_arrange(fm);
+        }
+        dx = e->root_x - px;
+        dy = e->root_y - py;
+        xw = (cur == CursorMove ? wx : ww) + dx;
+        yh = (cur == CursorMove ? wy : wh) + dy;
+        (cur == CursorMove ? cln_move : cln_resize)(fc, xw, yh);
+        xcb_flush(sn.conn);
+        break;
+      default:
+        if (handler[type])
+          handler[type](ge);
+    }
+    xfree(ge);
+  } while (type != XCB_BUTTON_RELEASE);
+}
+
+void ptr_ungrab(void)
+{
+  xcb_ungrab_pointer(sn.conn, XCB_CURRENT_TIME);
+  xcb_flush(sn.conn);
 }
 
 void grant_configure_request(xcb_configure_request_event_t *e)
@@ -479,35 +538,12 @@ void on_button_press(xcb_generic_event_t *ge)
   int i, n;
   LOGV("on_button_press: %d @ %d\n", e->event, e->sequence)
 
-  cln_set_focus(cln_from_frame(e->event));
+  if (e->event != sn.root)
+    cln_set_focus(cln_from_frame(e->event));
+
   for (i = 0, n = LENGTH(btnbinds); i < n; i++)
     if (e->detail == btnbinds[i].btn && e->state == btnbinds[i].mod && btnbinds[i].fn)
       btnbinds[i].fn(&btnbinds[i].arg);
-}
-
-void on_motion_notify(xcb_generic_event_t *ge)
-{
-  xcb_motion_notify_event_t *e = (xcb_motion_notify_event_t *)ge;
-  bool move_or_resize = ptr_state == PtrMoveCln;
-  int dx, dy, xw, yh;
-
-  assert(fc);
-  if (fc->isfullscr)
-    return;
-
-  if (ptr_first_motion) {
-    ptr_first_motion = false;
-    fc->isfloating = true;
-    cln_raise(fc);
-    mon_arrange(fm);
-  }
-
-  dx = e->root_x - ptr_x;
-  dy = e->root_y - ptr_y;
-  xw = (move_or_resize ? win_x : win_w) + dx;
-  yh = (move_or_resize ? win_y : win_h) + dy;
-  (move_or_resize ? cln_move : cln_resize)(fc, xw, yh);
-  xcb_flush(sn.conn);
 }
 
 void on_enter_notify(xcb_generic_event_t *ge)
@@ -1322,12 +1358,22 @@ void bn_swap_cln(const arg_t *arg)
 
 void bn_move_cln(UNUSED const arg_t *arg)
 {
-  ptr_motion(PtrMoveCln);
+  if (!fc || fc->isfullscr)
+    return;
+
+  ptr_grab(CursorMove);
+  ptr_motion(CursorMove);
+  ptr_ungrab();
 }
 
 void bn_resize_cln(UNUSED const arg_t *arg)
 {
-  ptr_motion(PtrResizeCln);
+  if (!fc || fc->isfullscr)
+    return;
+
+  ptr_grab(CursorResize);
+  ptr_motion(CursorResize);
+  ptr_ungrab();
 }
 
 void bn_toggle_select(UNUSED const arg_t *arg)
